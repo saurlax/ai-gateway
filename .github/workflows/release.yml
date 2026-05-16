@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Go tests
+        run: go test ./... -count=1 -timeout=120s
+        env:
+          CGO_ENABLED: '0'
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          pnpm install --no-frozen-lockfile --lockfile=false
+          pnpm build
+          touch dist/.keep
+
+      - name: Compute version metadata
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            TAGS="$VERSION,latest"
+          else
+            TAGS="$VERSION"
+          fi
+          echo "version=$VERSION"       >> "$GITHUB_OUTPUT"
+          echo "commit=$COMMIT"         >> "$GITHUB_OUTPUT"
+          echo "build_date=$BUILD_DATE" >> "$GITHUB_OUTPUT"
+          echo "tags=$TAGS"             >> "$GITHUB_OUTPUT"
+
+      - uses: ko-build/setup-ko@v0.7
+        env:
+          KO_DOCKER_REPO: docker.io/vaalacat/ai-gateway
+
+      - name: Login to Dockerhub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | ko login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: ko build & publish
+        env:
+          KO_DOCKER_REPO: docker.io/vaalacat/ai-gateway
+          VERSION:    ${{ steps.meta.outputs.version }}
+          COMMIT:     ${{ steps.meta.outputs.commit }}
+          BUILD_DATE: ${{ steps.meta.outputs.build_date }}
+          TAGS:       ${{ steps.meta.outputs.tags }}
+        run: |
+          IFS=',' read -ra TAG_ARR <<< "$TAGS"
+          TAG_ARGS=()
+          for t in "${TAG_ARR[@]}"; do TAG_ARGS+=(-t "$t"); done
+          ko build ./cmd \
+            --bare \
+            --sbom=none \
+            --platform=linux/amd64,linux/arm64 \
+            "${TAG_ARGS[@]}"

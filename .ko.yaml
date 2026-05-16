@@ -3,9 +3,14 @@ builds:
     main: ./cmd
     env:
       - GOCACHE=/tmp/ko-gocache
+    flags:
+      - -tags=embed_assets
     ldflags:
       - -s
       - -w
+      - -X github.com/VaalaCat/ai-gateway/internal/version.Version={{.Env.VERSION}}
+      - -X github.com/VaalaCat/ai-gateway/internal/version.Commit={{.Env.COMMIT}}
+      - -X github.com/VaalaCat/ai-gateway/internal/version.BuildDate={{.Env.BUILD_DATE}}
 
 defaultPlatforms:
   - linux/arm64

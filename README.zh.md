@@ -77,7 +77,7 @@ cp config.example.yaml deploy/config.yaml
 # 编辑 deploy/config.yaml — 设置 jwt_secret 和 admin_password
 
 # 2. Docker Compose 启动
-export AI_GATEWAY_IMAGE=ghcr.io/vaalacat/ai-gateway:latest
+export AI_GATEWAY_IMAGE=vaalacat/ai-gateway:latest
 docker compose up -d
 
 # 3. 访问
@@ -128,6 +128,24 @@ CGO_ENABLED=0 go test ./... -count=1 -timeout=120s
 # 前端开发服务器（端口 8141，代理到 :8140）
 cd web && pnpm install && pnpm dev
 ```
+
+## 发布
+
+推送 `v*` 格式的 git tag 即触发发布。GitHub Actions 会构建多架构镜像
+（linux/amd64 + linux/arm64）并推送到
+[Dockerhub](https://hub.docker.com/r/vaalacat/ai-gateway)。
+
+```bash
+# 正式版发布 — 同时更新 :latest
+git tag v1.2.3
+git push origin v1.2.3
+
+# 预发布版本 — 仅推送 :v1.2.3-rc1，不更新 :latest
+git tag v1.2.3-rc1
+git push origin v1.2.3-rc1
+```
+
+git tag 会作为 `internal/version.Version` 注入到二进制中。
 
 ## 贡献
 

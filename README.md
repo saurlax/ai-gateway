@@ -77,7 +77,7 @@ cp config.example.yaml deploy/config.yaml
 # Edit deploy/config.yaml — set jwt_secret and admin_password
 
 # 2. Run with Docker Compose
-export AI_GATEWAY_IMAGE=ghcr.io/vaalacat/ai-gateway:latest
+export AI_GATEWAY_IMAGE=vaalacat/ai-gateway:latest
 docker compose up -d
 
 # 3. Access
@@ -128,6 +128,24 @@ CGO_ENABLED=0 go test ./... -count=1 -timeout=120s
 # Frontend dev server (port 8141, proxies to :8140)
 cd web && pnpm install && pnpm dev
 ```
+
+## Releasing
+
+Releases are cut by pushing a `v*` git tag. GitHub Actions builds a multi-arch
+image (linux/amd64 + linux/arm64) and pushes it to
+[Dockerhub](https://hub.docker.com/r/vaalacat/ai-gateway).
+
+```bash
+# Stable release — also updates :latest
+git tag v1.2.3
+git push origin v1.2.3
+
+# Pre-release — pushes :v1.2.3-rc1 only, does NOT update :latest
+git tag v1.2.3-rc1
+git push origin v1.2.3-rc1
+```
+
+The git tag is injected into the binary as `internal/version.Version`.
 
 ## Contributing
 
