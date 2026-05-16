@@ -2,17 +2,18 @@
 
 # AI Gateway
 
-分布式 AI API 网关，采用控制平面（master）+ 数据平面（agent）架构，提供 OpenAI 兼容的 `/v1/*` 转发能力，内置管理 API 与 Web UI，单二进制部署。
+为分布式而生的 AI API 网关，采用控制平面（master）+ 数据平面（agent）分离架构，提供 OpenAI/Claude 兼容的 `/v1/*` 转发能力，内置管理 API 与 Web UI，单二进制分布式部署。
 
 [English](README.md)
 
 ## 核心能力
 
-- **控制平面管理** — 用户、令牌、渠道、模型、Agent 管理
-- **数据平面转发** — 兼容 OpenAI 风格接口（`/v1/chat/completions`、`/v1/responses` 等）
-- **实时配置同步** — master 与 agent 通过 WebSocket 增量同步
+- **控制平面管理** — 用户（组）、令牌、渠道、模型、Agent 管理
+- **数据平面转发** — 兼容 OpenAI/Claude 风格接口（`/v1/chat/completions`、`/v1/responses`、`/v1/messages` 等），多种协议自动转换
+- **实时配置同步** — master 与 agent 通过 WebSocket 增量同步，轻量级分布式部署，零外部依赖
+- **多地域路由** — 支持将a地域的请求路由到b地域的 agent，实现跨地域负载均衡、突破限制
 - **配额与计费** — 基于 usage log 的扣费与配额检查
-- **模型路由** — 将多个上游模型聚合为一个对外名称，按优先级/权重负载均衡
+- **模型路由** — 将多个上游模型聚合为一个对外名称，按优先级/权重负载均衡，错误重试
 - **单二进制部署** — 前端静态资源 embed 进二进制，无需独立前端服务
 
 ## 界面截图

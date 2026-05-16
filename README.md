@@ -2,17 +2,18 @@
 
 # AI Gateway
 
-A distributed AI API gateway with a control-plane/data-plane architecture. Provides OpenAI-compatible `/v1/*` relay endpoints, built-in management APIs, Web UI, and single-binary deployment.
+A distributed-by-design AI API gateway with a separated control-plane (master) / data-plane (agent) architecture. Provides OpenAI/Claude-compatible `/v1/*` relay endpoints, built-in management APIs, Web UI, and single-binary distributed deployment.
 
 [中文文档](README.zh.md)
 
 ## Features
 
-- **Control Plane Management** — Users, tokens, channels, models, and agents
-- **Data Plane Relay** — OpenAI-compatible API endpoints (`/v1/chat/completions`, `/v1/responses`, etc.)
-- **Real-Time Config Sync** — Master/agent incremental sync over WebSocket
+- **Control Plane Management** — Users (groups), tokens, channels, models, and agents
+- **Data Plane Relay** — OpenAI/Claude-compatible API endpoints (`/v1/chat/completions`, `/v1/responses`, `/v1/messages`, etc.) with automatic cross-protocol conversion
+- **Real-Time Config Sync** — Master/agent incremental sync over WebSocket; lightweight distributed deployment with zero external dependencies
+- **Multi-Region Routing** — Route requests from region A to agents in region B, enabling cross-region load balancing and bypassing regional restrictions
 - **Quota & Billing** — Usage-based settlement and quota enforcement
-- **Model Routing** — Aggregate multiple upstream models under one name with priority/weight load balancing
+- **Model Routing** — Aggregate multiple upstream models under one name with priority/weight load balancing and error retries
 - **Single Binary** — Frontend static assets embedded; no separate web server needed
 
 ## Screenshots
