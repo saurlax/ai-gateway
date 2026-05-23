@@ -47,6 +47,8 @@ import {
 } from "@/lib/api/system";
 import { RefreshCw, Trash2, Database, Server, Activity, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { BYOKSettingsCard } from "@/components/system/byok-settings";
+import { formatFileSize, formatUptime } from "@/lib/utils/format";
 
 export default function SystemMaintenancePage() {
   const t = useTranslations("system");
@@ -57,6 +59,7 @@ export default function SystemMaintenancePage() {
 
   const [traceMaxBodyKB, setTraceMaxBodyKB] = useState<number | null>(null);
   const [proxyUrlInput, setProxyUrlInput] = useState<string | null>(null);
+  const [fallbackSleepInput, setFallbackSleepInput] = useState<string | null>(null);
   const [cleanupTarget, setCleanupTarget] = useState("traces");
   const [retainDays, setRetainDays] = useState(30);
   const [showPreview, setShowPreview] = useState(false);
@@ -78,12 +81,18 @@ export default function SystemMaintenancePage() {
   const displayProxyUrl = proxyUrlInput ?? currentProxyUrl;
   const proxyHasChanges = displayProxyUrl !== currentProxyUrl;
 
+  const currentFallbackSleepMs = settings?.settings?.fallback_sleep_ms
+    ? Number(settings.settings.fallback_sleep_ms)
+    : 1000;
+  const displayFallbackSleep = fallbackSleepInput ?? String(currentFallbackSleepMs);
+  const fallbackSleepHasChanges = displayFallbackSleep !== String(currentFallbackSleepMs);
+
   const currentAutoCreate = settings?.settings?.oauth_auto_create === "true";
   const [autoCreateInput, setAutoCreateInput] = useState<boolean | null>(null);
   const displayAutoCreate = autoCreateInput ?? currentAutoCreate;
   const autoCreateHasChanges = displayAutoCreate !== currentAutoCreate;
 
-  const hasChanges = traceHasChanges || proxyHasChanges || autoCreateHasChanges;
+  const hasChanges = traceHasChanges || proxyHasChanges || autoCreateHasChanges || fallbackSleepHasChanges;
 
   const handleSaveSettings = () => {
     const updates: Record<string, string> = {};
@@ -96,6 +105,14 @@ export default function SystemMaintenancePage() {
     if (autoCreateHasChanges) {
       updates.oauth_auto_create = String(displayAutoCreate);
     }
+    if (fallbackSleepHasChanges) {
+      const n = Number(fallbackSleepInput);
+      if (!Number.isFinite(n) || n < 0 || n > 60000) {
+        toast.error(t("fallbackSleepRangeError"));
+        return;
+      }
+      updates.fallback_sleep_ms = String(n);
+    }
     if (Object.keys(updates).length === 0) return;
 
     updateSettings.mutate(
@@ -106,6 +123,7 @@ export default function SystemMaintenancePage() {
           setTraceMaxBodyKB(null);
           setProxyUrlInput(null);
           setAutoCreateInput(null);
+          setFallbackSleepInput(null);
         },
         onError: () => {
           toast.error(t("settingsSaveFailed"));
@@ -135,23 +153,6 @@ export default function SystemMaintenancePage() {
     );
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024)
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  };
-
-  const formatUptime = (seconds: number) => {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    if (days > 0) return `${days}d ${hours}h ${mins}m`;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    return `${mins}m`;
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -176,49 +177,49 @@ export default function SystemMaintenancePage() {
           {stats?.system && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">{t("version")}</p>
+                <p className="text-label text-muted-foreground">{t("version")}</p>
                 <p className="font-mono">{stats.system.version}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-label text-muted-foreground">
                   {t("goVersion")}
                 </p>
                 <p className="font-mono">{stats.system.go_version}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t("uptime")}</p>
+                <p className="text-label text-muted-foreground">{t("uptime")}</p>
                 <p className="font-mono">
                   {formatUptime(stats.system.uptime_sec)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-label text-muted-foreground">
                   {t("onlineAgents")}
                 </p>
                 <p className="font-mono">{stats.system.online_agents}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-label text-muted-foreground">
                   {t("memoryAlloc")}
                 </p>
                 <p className="font-mono">
-                  {formatBytes(stats.system.memory_alloc)}
+                  {formatFileSize(stats.system.memory_alloc)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-label text-muted-foreground">
                   {t("memorySys")}
                 </p>
                 <p className="font-mono">
-                  {formatBytes(stats.system.memory_sys)}
+                  {formatFileSize(stats.system.memory_sys)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t("gcCount")}</p>
+                <p className="text-label text-muted-foreground">{t("gcCount")}</p>
                 <p className="font-mono">{stats.system.num_gc}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-label text-muted-foreground">
                   {t("goroutines")}
                 </p>
                 <p className="font-mono">{stats.system.num_goroutine}</p>
@@ -240,7 +241,7 @@ export default function SystemMaintenancePage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>{t("traceMaxBodySize")}</Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-label text-muted-foreground">
               {t("traceMaxBodySizeDesc")}
             </p>
             <div className="flex items-center gap-2">
@@ -252,17 +253,32 @@ export default function SystemMaintenancePage() {
                 onChange={(e) => setTraceMaxBodyKB(Number(e.target.value))}
                 className="w-[150px]"
               />
-              <span className="text-sm text-muted-foreground">
+              <span className="text-label text-muted-foreground">
                 {t("traceMaxBodySizeUnit")}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               {t("traceMaxBodySizeRange")}
             </p>
           </div>
           <div className="space-y-2">
+            <Label>{t("fallbackSleep")}</Label>
+            <p className="text-label text-muted-foreground">
+              {t("fallbackSleepDesc")}
+            </p>
+            <Input
+              type="number"
+              value={displayFallbackSleep}
+              min={0}
+              max={60000}
+              onChange={(e) => setFallbackSleepInput(e.target.value)}
+              placeholder="1000"
+              className="w-[150px]"
+            />
+          </div>
+          <div className="space-y-2">
             <Label>{t("proxyUrl")}</Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-label text-muted-foreground">
               {t("proxyUrlDesc")}
             </p>
             <Input
@@ -276,7 +292,7 @@ export default function SystemMaintenancePage() {
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1">
               <Label>{t("oauthAutoCreate")}</Label>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-label text-muted-foreground">
                 {t("oauthAutoCreateDesc")}
               </p>
             </div>
@@ -294,6 +310,9 @@ export default function SystemMaintenancePage() {
         </CardContent>
       </Card>
 
+      {/* BYOK Settings */}
+      <BYOKSettingsCard />
+
       {/* Database Stats */}
       <Card>
         <CardHeader>
@@ -303,7 +322,7 @@ export default function SystemMaintenancePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="text-body">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("tableName")}</TableHead>
@@ -350,6 +369,7 @@ export default function SystemMaintenancePage() {
                 <SelectContent>
                   <SelectItem value="traces">{t("traceData")}</SelectItem>
                   <SelectItem value="logs">{t("logData")}</SelectItem>
+                  <SelectItem value="hourly_buckets">{t("hourlyBucketData")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -371,6 +391,10 @@ export default function SystemMaintenancePage() {
               {t("preview")}
             </Button>
           </div>
+
+          {cleanupTarget === "hourly_buckets" && (
+            <p className="text-xs text-muted-foreground">{t("cleanupHourlyHint")}</p>
+          )}
 
           {preview && showPreview && (
             <div className="rounded-md border p-4 space-y-2">
@@ -408,7 +432,11 @@ export default function SystemMaintenancePage() {
               {t("confirmCleanupDesc", {
                 count: preview?.to_delete ?? 0,
                 target:
-                  cleanupTarget === "traces" ? t("traceData") : t("logData"),
+                  cleanupTarget === "traces"
+                    ? t("traceData")
+                    : cleanupTarget === "logs"
+                      ? t("logData")
+                      : t("hourlyBucketData"),
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>
