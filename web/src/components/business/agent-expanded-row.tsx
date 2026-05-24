@@ -153,13 +153,13 @@ export function AgentExpandedRow({ agent }: AgentExpandedRowProps) {
         </div>
         {connectivity && connectivity.checked_at > 0 && connectivity.results && connectivity.results.length > 0 ? (
           <div className="border-t">
-            <Table className="text-body">
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="h-8 text-xs">{t("targetAgent")}</TableHead>
-                  <TableHead className="h-8 text-xs">{t("address")}</TableHead>
-                  <TableHead className="h-8 text-xs">{tc("status")}</TableHead>
-                  <TableHead className="h-8 text-xs">{t("latency")}</TableHead>
+                  <TableHead className="h-8">{t("targetAgent")}</TableHead>
+                  <TableHead className="h-8">{t("address")}</TableHead>
+                  <TableHead className="h-8">{tc("status")}</TableHead>
+                  <TableHead className="h-8">{t("latency")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -185,7 +185,7 @@ export function AgentExpandedRow({ agent }: AgentExpandedRowProps) {
                           <Badge variant="destructive" className="text-xs px-1.5 py-0">{t("unreachable")}</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-1.5 text-xs">
+                      <TableCell className="py-1.5">
                         {r.reachable ? formatDuration(r.latency_ms) : r.error || "-"}
                       </TableCell>
                     </TableRow>

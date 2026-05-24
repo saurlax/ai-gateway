@@ -460,7 +460,7 @@ function TokensPageContent() {
       id: "logs",
       header: tb("viewLogs"),
       cell: ({ row }) => (
-        <Button variant="outline" size="sm" asChild>
+        <Button variant="outline" size="xs" asChild>
           <Link href={logHref(row.original.token_id)}>{tb("viewLogs")}</Link>
         </Button>
       ),

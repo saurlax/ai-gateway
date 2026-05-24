@@ -44,6 +44,7 @@ function buildPayload(form: ChannelForm): Partial<Channel> {
     system_prompt_in_input: form.system_prompt_in_input,
     proxy_url: form.proxy_url,
     role_mapping: form.role_mapping,
+    disable_keepalive: form.disable_keepalive,
   } as Partial<Channel>;
 }
 

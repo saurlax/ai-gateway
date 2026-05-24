@@ -73,6 +73,9 @@ type RelayConfig struct {
 	Timeout             int `mapstructure:"timeout"`
 	MaxIdleConns        int `mapstructure:"max_idle_conns"`
 	MaxIdleConnsPerHost int `mapstructure:"max_idle_conns_per_host"`
+	KeepaliveIdle       int `mapstructure:"keepalive_idle"`
+	KeepaliveInterval   int `mapstructure:"keepalive_interval"`
+	KeepaliveCount      int `mapstructure:"keepalive_count"`
 }
 
 type EventBusConfig struct {
@@ -100,6 +103,7 @@ type FileConfig struct {
 type MasterRuntimeConfig struct {
 	LogLevel string
 	Master   MasterConfig
+	Agent    AgentConfig
 	Runtime  RuntimeConfig
 	Relay    RelayConfig
 }
@@ -135,6 +139,7 @@ func (c *MasterRuntimeConfig) ToMasterRuntimeConfig() *MasterRuntimeConfig {
 	return &MasterRuntimeConfig{
 		LogLevel: normalizeDefault(c.LogLevel, "info"),
 		Master:   masterCfg,
+		Agent:    c.Agent,
 		Runtime:  runtimeCfg,
 		Relay:    normalizeRelayConfig(c.Relay),
 	}
@@ -164,6 +169,7 @@ func (c *Config) ToMasterRuntimeConfig() *MasterRuntimeConfig {
 	return &MasterRuntimeConfig{
 		LogLevel: normalizeDefault(c.LogLevel, "info"),
 		Master:   masterCfg,
+		Agent:    c.Agent,
 		Runtime:  runtimeCfg,
 		Relay:    normalizeRelayConfig(c.Relay),
 	}
@@ -232,10 +238,13 @@ func Load(path string) (*Config, error) {
 	viper.SetDefault("agent.cache.token_capacity", 20000)
 	viper.SetDefault("agent.cache.user_capacity", 20000)
 	viper.SetDefault("agent.cache.user_routings_capacity", 5000)
-	viper.SetDefault("agent.cache.negative_ttl_seconds", 30)
+	viper.SetDefault("agent.cache.negative_ttl_seconds", 600)
 	viper.SetDefault("relay.timeout", 300)
 	viper.SetDefault("relay.max_idle_conns", 100)
 	viper.SetDefault("relay.max_idle_conns_per_host", 10)
+	viper.SetDefault("relay.keepalive_idle", 15)
+	viper.SetDefault("relay.keepalive_interval", 15)
+	viper.SetDefault("relay.keepalive_count", 3)
 	viper.SetDefault("master.admin_user", "admin")
 	viper.SetDefault("master.proxy_url", "")
 	viper.SetDefault("eventbus.type", "memory")
@@ -270,6 +279,7 @@ func LoadMaster(path string) (*MasterRuntimeConfig, error) {
 	runtimeCfg := &MasterRuntimeConfig{
 		LogLevel: normalizeDefault(cfg.LogLevel, "info"),
 		Master:   cfg.Master,
+		Agent:    cfg.Agent,
 		Runtime:  cfg.Runtime,
 		Relay:    normalizeRelayConfig(cfg.Relay),
 	}
@@ -506,6 +516,15 @@ func normalizeRelayConfig(c RelayConfig) RelayConfig {
 	}
 	if c.MaxIdleConnsPerHost <= 0 {
 		c.MaxIdleConnsPerHost = 10
+	}
+	if c.KeepaliveIdle <= 0 {
+		c.KeepaliveIdle = 15
+	}
+	if c.KeepaliveInterval <= 0 {
+		c.KeepaliveInterval = 15
+	}
+	if c.KeepaliveCount <= 0 {
+		c.KeepaliveCount = 3
 	}
 	return c
 }

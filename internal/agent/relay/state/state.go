@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/codec"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/inflight"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/trace"
 	"github.com/VaalaCat/ai-gateway/internal/consts"
 	"github.com/VaalaCat/ai-gateway/internal/models"
@@ -62,8 +63,10 @@ type RelayContext struct {
 
 	Agent app.AgentApplication
 
-	Input RelayInput
-	State *RelayState
+	Input    RelayInput
+	State    *RelayState
+	// Inflight 是该请求在 in-flight 注册表里的句柄;可能为 nil(无注册表时)。
+	Inflight *inflight.Entry
 }
 
 // RelayInput 是请求 immutable 输入（ctxBuilder 装配完不再改）。

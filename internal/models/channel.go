@@ -21,6 +21,12 @@ type Channel struct {
 
 	// Override embedded tag: admin Channel needs an index on Tag.
 	Tag string `gorm:"size:64;index" json:"tag"`
+
+	// DisableKeepalive disables TCP connection reuse for this channel's upstream
+	// transport. Each request dials a fresh connection and closes it immediately
+	// after use. Useful for upstreams that exhibit stale-connection bugs at the
+	// cost of one extra handshake per request.
+	DisableKeepalive bool `json:"disable_keepalive" gorm:"default:false"`
 }
 
 // GetBaseURL returns the channel's base URL, falling back to the default

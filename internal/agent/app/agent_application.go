@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"go.uber.org/zap"
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/cache"
@@ -58,3 +60,6 @@ func (a *defaultAgentApplication) GetRouteForwarder() appkg.RouteForwarder { ret
 func (a *defaultAgentApplication) GetLogger() *zap.Logger                  { return a.logger }
 func (a *defaultAgentApplication) GetConfig() *config.AgentRuntimeConfig   { return a.cfg }
 func (a *defaultAgentApplication) GetTransportPool() appkg.TransportPool   { return a.transport }
+func (a *defaultAgentApplication) RelayTimeout() time.Duration {
+	return time.Duration(a.cfg.Runtime.RelayTimeout) * time.Second
+}

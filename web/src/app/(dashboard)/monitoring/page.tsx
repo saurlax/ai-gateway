@@ -117,7 +117,7 @@ function Inner() {
           <CardTitle>{t("channels.title")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table className="text-body">
+          <Table>
             <TableHeader>
               <TableRow className="text-muted-foreground">
                 <TableHead>{t("channels.name")}</TableHead>

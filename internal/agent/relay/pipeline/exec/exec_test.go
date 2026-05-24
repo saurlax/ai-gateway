@@ -83,6 +83,7 @@ func (s *stubExecAgent) GetLogger() *zap.Logger {
 }
 func (s *stubExecAgent) GetConfig() *config.AgentRuntimeConfig { return nil }
 func (s *stubExecAgent) GetTransportPool() app.TransportPool   { return stubExecTransportPool{} }
+func (s *stubExecAgent) RelayTimeout() time.Duration           { return 0 }
 
 type stubExecTransportPool struct{}
 

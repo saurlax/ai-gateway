@@ -354,7 +354,7 @@ export default function SystemMaintenancePage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table className="text-body">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t("tableName")}</TableHead>

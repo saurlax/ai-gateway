@@ -59,6 +59,7 @@ export interface Channel {
   proxy_url: string;
   role_mapping: string;
   system_prompt_in_input?: boolean;
+  disable_keepalive?: boolean;
   created_at: number;
   updated_at: number;
 }

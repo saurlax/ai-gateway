@@ -598,6 +598,19 @@ func TestRecorder_Finalize_TimingsAccumulatedAcrossStages(t *testing.T) {
 	}
 }
 
+func TestRecorder_StageHookFires(t *testing.T) {
+	rec := NewRecorder(false, 0)
+	var got []string
+	rec.SetStageHook(func(s Stage) { got = append(got, string(s)) })
+
+	rec.WithStage(StageUpstreamDispatch)
+	rec.WithStage(StageUpstreamDecode)
+
+	if len(got) != 2 || got[0] != "upstream_dispatch" || got[1] != "upstream_decode" {
+		t.Fatalf("hook not fired correctly: %v", got)
+	}
+}
+
 // TestTraceRecordHasNoFailErr: 防回归——TraceRecord 不再含 FailErr 字段。
 // 历史上该字段从未在 MarshalJSON 输出，删除后任何外部读都是编译错。
 func TestTraceRecordHasNoFailErr(t *testing.T) {

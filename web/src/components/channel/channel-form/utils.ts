@@ -192,5 +192,6 @@ export function mapChannelToForm(channel: Channel): ChannelForm {
     proxy_url: channel.proxy_url ?? "",
     role_mapping: channel.role_mapping ?? "",
     system_prompt_in_input: !!channel.system_prompt_in_input,
+    disable_keepalive: !!channel.disable_keepalive,
   };
 }

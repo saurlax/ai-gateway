@@ -16,9 +16,13 @@ func TestTransportPoolImplementsInterface(t *testing.T) {
 	var _ app.TransportPool = (*transportPool)(nil)
 }
 
+// defaultKc 是测试用零值 KeepaliveConfig（Idle/Interval/Count=0 代表不启用探测,
+// 但结构上有效——buildDialer 仍返回合法 Dialer）。
+var defaultKc = KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3}
+
 // TestNewTransportPoolReturnsInterface 验证导出构造函数返回非 nil 接口。
 func TestNewTransportPoolReturnsInterface(t *testing.T) {
-	pool := NewTransportPool(8, 4, 30*time.Second)
+	pool := NewTransportPool(8, 4, 30*time.Second, defaultKc)
 	if pool == nil {
 		t.Fatal("NewTransportPool returned nil")
 	}
@@ -32,7 +36,7 @@ func TestNewTransportPoolReturnsInterface(t *testing.T) {
 // TestTransportPoolGetEmptyChannelFields 覆盖边界：channel 字段为零值，
 // Get 不应 panic，并能正常返回 transport。
 func TestTransportPoolGetEmptyChannelFields(t *testing.T) {
-	pool := NewTransportPool(8, 4, 30*time.Second)
+	pool := NewTransportPool(8, 4, 30*time.Second, defaultKc)
 	tr := pool.Get(&models.Channel{ChannelCore: models.ChannelCore{ID: 999}, ProxyURL: ""})
 	if tr == nil {
 		t.Fatal("Get should return a usable transport for zero-value channel")
@@ -40,7 +44,7 @@ func TestTransportPoolGetEmptyChannelFields(t *testing.T) {
 }
 
 func TestTransportPool_GetReturnsCachedInstance(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, defaultKc)
 	ch := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://api.example.com"}}
 
 	t1 := p.Get(ch)
@@ -51,7 +55,7 @@ func TestTransportPool_GetReturnsCachedInstance(t *testing.T) {
 }
 
 func TestTransportPool_DifferentChannelsGetDifferentTransports(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, defaultKc)
 	ch1 := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://a"}}
 	ch2 := &models.Channel{ChannelCore: models.ChannelCore{ID: 2, BaseURL: "https://b"}}
 
@@ -61,7 +65,7 @@ func TestTransportPool_DifferentChannelsGetDifferentTransports(t *testing.T) {
 }
 
 func TestTransportPool_ReadsConfigFields(t *testing.T) {
-	p := newTransportPool(50, 5, 60*time.Second)
+	p := newTransportPool(50, 5, 60*time.Second, defaultKc)
 	ch := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://x"}}
 	tr := p.Get(ch)
 	if tr.MaxIdleConns != 50 {
@@ -79,7 +83,7 @@ func TestTransportPool_ReadsConfigFields(t *testing.T) {
 }
 
 func TestTransportPool_ProxyURLAppliedToTransport(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, defaultKc)
 	ch := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://x"}, ProxyURL: "http://proxy.local:3128"}
 	tr := p.Get(ch)
 	if tr.Proxy == nil {
@@ -97,7 +101,7 @@ func TestTransportPool_ProxyURLAppliedToTransport(t *testing.T) {
 }
 
 func TestTransportPool_InvalidateRebuildsAfter(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, defaultKc)
 	ch := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://x"}, ProxyURL: "http://proxy:3128"}
 
 	t1 := p.Get(ch)
@@ -109,7 +113,7 @@ func TestTransportPool_InvalidateRebuildsAfter(t *testing.T) {
 }
 
 func TestTransportPool_ConcurrentGetCreatesOnce(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, defaultKc)
 	ch := &models.Channel{ChannelCore: models.ChannelCore{ID: 1, BaseURL: "https://x"}}
 
 	var seen sync.Map
@@ -132,7 +136,7 @@ func TestTransportPool_ConcurrentGetCreatesOnce(t *testing.T) {
 }
 
 func TestTransportPool_InvalidateOnlyOnProxyChange(t *testing.T) {
-	p := newTransportPool(100, 10, 30*time.Second)
+	p := newTransportPool(100, 10, 30*time.Second, KeepaliveConfig{Idle: time.Second, Interval: time.Second, Count: 3})
 	ch1 := &models.Channel{ChannelCore: models.ChannelCore{ID: 1}, ProxyURL: "http://proxy1:3128"}
 	t1 := p.Get(ch1)
 
@@ -142,5 +146,35 @@ func TestTransportPool_InvalidateOnlyOnProxyChange(t *testing.T) {
 	t2 := p.Get(ch1)
 	if t1 == t2 {
 		t.Errorf("expected new transport after ProxyURL change")
+	}
+}
+
+func TestBuildDialer_KeepAliveConfig(t *testing.T) {
+	d := buildDialer(KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3})
+	if !d.KeepAliveConfig.Enable {
+		t.Fatal("keepalive should be enabled")
+	}
+	if d.KeepAliveConfig.Idle != 15*time.Second || d.KeepAliveConfig.Interval != 15*time.Second || d.KeepAliveConfig.Count != 3 {
+		t.Fatalf("keepalive params mismatch: %+v", d.KeepAliveConfig)
+	}
+}
+
+func TestBuild_HasDialContext(t *testing.T) {
+	p := newTransportPool(10, 5, 60*time.Second, KeepaliveConfig{Idle: time.Second, Interval: time.Second, Count: 3})
+	tr := p.build(&models.Channel{ChannelCore: models.ChannelCore{ID: 1}})
+	if tr.DialContext == nil {
+		t.Fatal("transport must set DialContext for TCP keepalive")
+	}
+}
+
+func TestBuild_DisableKeepaliveSwitch(t *testing.T) {
+	p := newTransportPool(10, 5, 60*time.Second, KeepaliveConfig{Idle: time.Second, Interval: time.Second, Count: 3})
+	on := p.build(&models.Channel{ChannelCore: models.ChannelCore{ID: 1}, DisableKeepalive: true})
+	if !on.DisableKeepAlives {
+		t.Fatal("DisableKeepalive=true should set Transport.DisableKeepAlives")
+	}
+	off := p.build(&models.Channel{ChannelCore: models.ChannelCore{ID: 2}})
+	if off.DisableKeepAlives {
+		t.Fatal("default channel must keep connection reuse on")
 	}
 }

@@ -2,6 +2,7 @@ package upstream
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -11,10 +12,32 @@ import (
 	"github.com/VaalaCat/ai-gateway/internal/pkg/app"
 )
 
+// KeepaliveConfig 控制上游 TCP 连接的保活探测(用于及时发现半开死连接)。
+type KeepaliveConfig struct {
+	Idle     time.Duration
+	Interval time.Duration
+	Count    int
+}
+
+// buildDialer 构造带 TCP 保活的拨号器。保活探测对"慢但活"的连接零误杀,
+// 只在对端不应答时(半开死连接)于 Idle+Interval*Count 内判死。
+func buildDialer(kc KeepaliveConfig) *net.Dialer {
+	return &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: kc.Interval,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable:   true,
+			Idle:     kc.Idle,
+			Interval: kc.Interval,
+			Count:    kc.Count,
+		},
+	}
+}
+
 // NewTransportPool 是 newTransportPool 的导出封装，返回 app.TransportPool 接口。
 // 给 agent application 装配用——避免暴露包内私有类型。
-func NewTransportPool(maxIdle, maxIdlePerHost int, responseTimeout time.Duration) app.TransportPool {
-	return newTransportPool(maxIdle, maxIdlePerHost, responseTimeout)
+func NewTransportPool(maxIdle, maxIdlePerHost int, responseTimeout time.Duration, kc KeepaliveConfig) app.TransportPool {
+	return newTransportPool(maxIdle, maxIdlePerHost, responseTimeout, kc)
 }
 
 // TransportPool 按 channel.ID|proxy_url 缓存 *http.Transport，让连接池在多次
@@ -25,14 +48,16 @@ type transportPool struct {
 	maxIdleConns        int
 	maxIdleConnsPerHost int
 	responseTimeout     time.Duration
+	keepalive           KeepaliveConfig
 }
 
-func newTransportPool(maxIdle, maxIdlePerHost int, responseTimeout time.Duration) *transportPool {
+func newTransportPool(maxIdle, maxIdlePerHost int, responseTimeout time.Duration, kc KeepaliveConfig) *transportPool {
 	return &transportPool{
 		transports:          map[string]*http.Transport{},
 		maxIdleConns:        maxIdle,
 		maxIdleConnsPerHost: maxIdlePerHost,
 		responseTimeout:     responseTimeout,
+		keepalive:           kc,
 	}
 }
 
@@ -63,6 +88,7 @@ func (p *transportPool) Get(ch *models.Channel) *http.Transport {
 
 func (p *transportPool) build(ch *models.Channel) *http.Transport {
 	t := &http.Transport{
+		DialContext:           buildDialer(p.keepalive).DialContext,
 		MaxIdleConns:          p.maxIdleConns,
 		MaxIdleConnsPerHost:   p.maxIdleConnsPerHost,
 		MaxConnsPerHost:       0, // unlimited，长流式并发不被钳制
@@ -75,6 +101,9 @@ func (p *transportPool) build(ch *models.Channel) *http.Transport {
 		if u, err := url.Parse(ch.ProxyURL); err == nil {
 			t.Proxy = http.ProxyURL(u)
 		}
+	}
+	if ch.DisableKeepalive {
+		t.DisableKeepAlives = true
 	}
 	return t
 }

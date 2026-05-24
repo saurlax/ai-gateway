@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, RefreshCw } from "lucide-react";
@@ -16,12 +16,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { OnlineBadge } from "@/components/business/status-badge";
 import { DateCell } from "@/components/business/date-cell";
 import { CopyableText } from "@/components/business/copyable-text";
 import { CacheStatsTable } from "@/components/business/cache-stats-table";
 
-import { useAgentDetail, useConnectivityReport, useCheckConnectivity, useFullSyncAgents } from "@/lib/api/agents";
+import { useAgentDetail, useConnectivityReport, useCheckConnectivity, useFullSyncAgents, useAgentInflight, useAgentGoroutines } from "@/lib/api/agents";
+import type { GoroutineDump } from "@/lib/api/agents";
 import { formatErrorToast } from "@/lib/api/error-toast";
 import { formatDuration, formatUptime } from "@/lib/utils/format";
 import type { AgentAddress } from "@/lib/types";
@@ -40,6 +47,139 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
     <div className="min-w-0">
       <div className="text-xs text-muted-foreground truncate">{label}</div>
       <div className="text-sm font-medium truncate mt-0.5">{children}</div>
+    </div>
+  );
+}
+
+function GoroutineDumpDialog({
+  open,
+  onOpenChange,
+  data,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  data: GoroutineDump | null;
+}) {
+  const t = useTranslations("agents");
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>
+            {data ? t("goroutineDumpTitle", { count: data.count }) : t("goroutineDump")}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-auto min-h-0">
+          <pre className="text-xs whitespace-pre-wrap break-all p-2 bg-muted rounded">
+            {data?.dump ?? ""}
+          </pre>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InflightSection({ agentId }: { agentId: number }) {
+  const t = useTranslations("agents");
+  const tc = useTranslations("common");
+  const { data: rows = [], isFetching, refetch } = useAgentInflight(agentId);
+  const goroutinesMutation = useAgentGoroutines();
+  const [dumpOpen, setDumpOpen] = useState(false);
+  const [dumpData, setDumpData] = useState<GoroutineDump | null>(null);
+
+  const handleGoroutineDump = async () => {
+    try {
+      const result = await goroutinesMutation.mutateAsync(agentId);
+      setDumpData(result);
+      setDumpOpen(true);
+    } catch (e) {
+      toast.error(formatErrorToast(e, tc("error")));
+    }
+  };
+
+  return (
+    <div className="rounded-md border">
+      <div className="flex items-center justify-between px-4 py-3">
+        <h2 className="text-sm font-medium">{t("inflightTitle")}</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={`mr-1 size-3 ${isFetching ? "animate-spin" : ""}`} />
+            {t("inflightRefresh")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={handleGoroutineDump}
+            disabled={goroutinesMutation.isPending}
+          >
+            <RefreshCw className={`mr-1 size-3 ${goroutinesMutation.isPending ? "animate-spin" : ""}`} />
+            {goroutinesMutation.isPending ? t("goroutineDumping") : t("goroutineDump")}
+          </Button>
+        </div>
+      </div>
+      {rows.length > 0 ? (
+        <div className="border-t">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="h-8">{t("inflightColModel")}</TableHead>
+                <TableHead className="h-8">{t("inflightColChannel")}</TableHead>
+                <TableHead className="h-8">{t("inflightColStage")}</TableHead>
+                <TableHead className="h-8">{t("inflightColElapsed")}</TableHead>
+                <TableHead className="h-8">{t("inflightColStream")}</TableHead>
+                <TableHead className="h-8">{t("inflightColReqId")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((row) => {
+                const elapsedSec = (row.elapsed_ms / 1000).toFixed(1);
+                const isSlow = row.elapsed_ms > 60000;
+                return (
+                  <TableRow key={row.req_id}>
+                    <TableCell className="py-1.5">{row.model}</TableCell>
+                    <TableCell className="py-1.5">
+                      <span>{row.channel_name}</span>
+                      <span className="ml-1 text-muted-foreground">#{row.channel_id}</span>
+                    </TableCell>
+                    <TableCell className="py-1.5">{row.stage}</TableCell>
+                    <TableCell className="py-1.5">
+                      {isSlow ? (
+                        <span className="text-destructive font-medium">
+                          {elapsedSec}s ({t("inflightSlowHint")})
+                        </span>
+                      ) : (
+                        <span>{elapsedSec}s</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-1.5">
+                      {row.is_stream ? (
+                        <Badge variant="secondary" className="text-xs px-1.5 py-0">{t("inflightStreamYes")}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">{t("inflightStreamNo")}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-1.5 font-mono">
+                      <CopyableText text={row.req_id} />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        <div className="border-t px-4 py-3">
+          <p className="text-xs text-muted-foreground">{t("inflightEmpty")}</p>
+        </div>
+      )}
+      <GoroutineDumpDialog open={dumpOpen} onOpenChange={setDumpOpen} data={dumpData} />
     </div>
   );
 }
@@ -185,6 +325,9 @@ function AgentDetailContent() {
         </div>
       )}
 
+      {/* In-Flight Requests */}
+      <InflightSection agentId={id} />
+
       {/* Connectivity — matching bordered panel */}
       <div className="rounded-md border">
         <div className="flex items-center justify-between px-4 py-3">
@@ -209,13 +352,13 @@ function AgentDetailContent() {
         </div>
         {connectivity && connectivity.checked_at > 0 && connectivity.results && connectivity.results.length > 0 ? (
           <div className="border-t">
-            <Table className="text-body">
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="h-8 text-xs">{t("targetAgent")}</TableHead>
-                  <TableHead className="h-8 text-xs">{t("address")}</TableHead>
-                  <TableHead className="h-8 text-xs">{tc("status")}</TableHead>
-                  <TableHead className="h-8 text-xs">{t("latency")}</TableHead>
+                  <TableHead className="h-8">{t("targetAgent")}</TableHead>
+                  <TableHead className="h-8">{t("address")}</TableHead>
+                  <TableHead className="h-8">{tc("status")}</TableHead>
+                  <TableHead className="h-8">{t("latency")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -241,7 +384,7 @@ function AgentDetailContent() {
                           <Badge variant="destructive" className="text-xs px-1.5 py-0">{t("unreachable")}</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="py-1.5 text-xs">
+                      <TableCell className="py-1.5">
                         {r.reachable ? formatDuration(r.latency_ms) : r.error || "-"}
                       </TableCell>
                     </TableRow>

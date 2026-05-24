@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { JsonField } from "@/components/business/json-field";
 import { FieldTip } from "@/components/business/field-tip";
@@ -73,6 +74,25 @@ export function RequestRewriteSection({
             value={form.proxy_url}
             onChange={(e) => setForm({ ...form, proxy_url: e.target.value })}
             placeholder="http://proxy:8080"
+          />
+        </div>
+      )}
+
+      {/* Disable Keepalive */}
+      {!hiddenFields?.has("disable_keepalive") && (
+        <div className="flex items-center justify-between rounded-md border p-3">
+          <div className="space-y-0.5">
+            <Label htmlFor="disable_keepalive">
+              {t("disableKeepalive")}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t("disableKeepaliveHint")}
+            </p>
+          </div>
+          <Switch
+            id="disable_keepalive"
+            checked={form.disable_keepalive}
+            onCheckedChange={(v) => setForm({ ...form, disable_keepalive: v })}
           />
         </div>
       )}

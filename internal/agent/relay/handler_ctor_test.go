@@ -19,7 +19,7 @@ import (
 func TestNewHandler_WiresStageFields(t *testing.T) {
 	store := cache.NewStore(nil, config.AgentCacheConfig{})
 	logger := zap.NewNop()
-	pool := upstream.NewTransportPool(8, 4, 5*time.Second)
+	pool := upstream.NewTransportPool(8, 4, 5*time.Second, upstream.KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3})
 	cfg := &config.AgentRuntimeConfig{
 		Runtime: config.RuntimeConfig{RetryMax: 7},
 		Relay:   config.RelayConfig{Timeout: 30},
@@ -27,7 +27,7 @@ func TestNewHandler_WiresStageFields(t *testing.T) {
 	agentApp := agentappkg.NewDefaultAgentApplication(store, nil, logger, cfg, pool)
 	bus := eventbus.NewMemoryBus()
 
-	h := NewHandler(bus, agentApp, TestDispatcherFactory(agentApp))
+	h := NewHandler(bus, agentApp, TestDispatcherFactory(agentApp), nil)
 
 	if h == nil {
 		t.Fatal("NewHandler returned nil")
@@ -66,7 +66,7 @@ func TestNewHandler_NilArgsDoesNotPanic(t *testing.T) {
 			t.Errorf("NewHandler(nil, nil, nil) panicked: %v", r)
 		}
 	}()
-	h := NewHandler(nil, nil, nil)
+	h := NewHandler(nil, nil, nil, nil)
 	if h == nil {
 		t.Fatal("NewHandler(nil, nil, nil) returned nil; should still construct")
 	}

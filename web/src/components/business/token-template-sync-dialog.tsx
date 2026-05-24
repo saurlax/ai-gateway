@@ -156,7 +156,7 @@ export function TokenTemplateSyncDialog({ template, onOpenChange }: Props) {
             ) : (
               <>
                 <div className="max-h-[60vh] overflow-auto rounded-md border">
-                  <Table className="text-body">
+                  <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>{t("sync.tokenName")}</TableHead>

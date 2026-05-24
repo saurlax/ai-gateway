@@ -233,7 +233,7 @@ function BillingPageContent() {
         id: "logs",
         header: t("viewLogs"),
         cell: ({ row }) => (
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="xs" asChild>
             <Link
               href={logHref({
                 token_id: row.original.token_id,
@@ -332,7 +332,7 @@ function BillingPageContent() {
         id: "logs",
         header: t("viewLogs"),
         cell: ({ row }) => (
-          <Button variant="outline" size="sm" asChild>
+          <Button variant="outline" size="xs" asChild>
             <Link href={logHref({ channel_id: row.original.channel_id })}>
               {t("viewLogs")}
             </Link>

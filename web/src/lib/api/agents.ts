@@ -2,6 +2,21 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildQuery } from "./client";
 import type { Agent, AgentDetail, OnlineAgentInfo, ConnectivityReport, PaginatedResponse, PaginatedParams } from "@/lib/types";
 
+export interface InflightSnapshot {
+  req_id: string;
+  channel_id: number;
+  channel_name: string;
+  model: string;
+  is_stream: boolean;
+  stage: string;
+  elapsed_ms: number;
+}
+
+export interface GoroutineDump {
+  count: number;
+  dump: string;
+}
+
 export function useAgents(params: PaginatedParams = {}) {
   return useQuery({
     queryKey: ["agents", params],
@@ -108,5 +123,21 @@ export function useFullSyncAgents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents"] });
     },
+  });
+}
+
+export function useAgentInflight(id: number) {
+  return useQuery({
+    queryKey: ["agents", id, "inflight"],
+    queryFn: () => api.get<InflightSnapshot[]>(`/admin/agents/inflight?id=${id}`),
+    enabled: !!id,
+    refetchInterval: 5000,
+  });
+}
+
+export function useAgentGoroutines() {
+  return useMutation({
+    mutationFn: (id: number) =>
+      api.get<GoroutineDump>(`/admin/agents/goroutines?id=${id}`),
   });
 }

@@ -42,7 +42,7 @@ export function ProfileUsageCard({ userId }: ProfileUsageCardProps) {
         <CardTitle className="text-lg">{t("myUsage")}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Table className="text-body">
+        <Table>
           <TableHeader>
             <TableRow>
               <TableHead>{tl("modelName")}</TableHead>

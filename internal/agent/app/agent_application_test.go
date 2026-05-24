@@ -26,7 +26,7 @@ func TestDefaultAgentApplicationGetters(t *testing.T) {
 	rf := &agentproxy.RouteForwarder{}
 	logger := zap.NewNop()
 	cfg := &config.AgentRuntimeConfig{}
-	pool := upstream.NewTransportPool(8, 4, 30*time.Second)
+	pool := upstream.NewTransportPool(8, 4, 30*time.Second, upstream.KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3})
 
 	aa := NewDefaultAgentApplication(store, rf, logger, cfg, pool)
 	if aa.GetCache() == nil {

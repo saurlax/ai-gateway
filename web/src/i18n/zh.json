@@ -606,7 +606,9 @@
     "filterByType": "按类型筛选",
     "filterByStatus": "按状态筛选",
     "enabled": "启用",
-    "disabled": "禁用"
+    "disabled": "禁用",
+    "disableKeepalive": "关闭连接复用",
+    "disableKeepaliveHint": "仅对个别异常上游开启；开启后该渠道每请求新建连接、用完即关"
   },
   "models": {
     "title": "模型配置",
@@ -742,7 +744,22 @@
     "noData": "暂无数据",
     "filterByStatus": "按状态筛选",
     "statusOnline": "在线",
-    "statusOffline": "离线"
+    "statusOffline": "离线",
+    "inflightTitle": "在途请求",
+    "inflightRefresh": "刷新",
+    "inflightEmpty": "无在途请求",
+    "inflightColModel": "模型",
+    "inflightColStage": "阶段",
+    "inflightColElapsed": "已耗时",
+    "inflightColStream": "流式",
+    "inflightColReqId": "请求 ID",
+    "inflightColChannel": "渠道",
+    "inflightStreamYes": "是",
+    "inflightStreamNo": "否",
+    "inflightSlowHint": "超时",
+    "goroutineDump": "抓取 Goroutine",
+    "goroutineDumpTitle": "Goroutine Dump（{count} 个）",
+    "goroutineDumping": "抓取中..."
   },
   "logs": {
     "title": "用量日志",

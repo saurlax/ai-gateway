@@ -153,6 +153,18 @@
   }
 }
 
+/* 表格字号统一标准——单一真相源(表头+单元格统一 12px,密集数据表)。
+   通过 shadcn 稳定的 data-slot 挂载,不修改 components/ui/table.tsx(保持可升级)。
+   值 = text-meta(12px),与表头 text-label / 多数单元格 text-meta 对齐。
+   表头/单元格继承此字号;表头靠 TableHead 自带 font-medium(及 text-label)区分。
+   选择器 table[data-slot="table"] 特异性(0,1,1)高于 shadcn 默认的 .text-sm(0,1,0),
+   故无需改组件即可生效。单元格走继承,所以个别内容仍可用 text-*(如展开详情的
+   text-body)直接覆盖(逃生舱)。 */
+table[data-slot="table"] {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
 @utility text-heading {
   font-size: 0.875rem;
   line-height: 1.25rem;

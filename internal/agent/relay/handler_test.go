@@ -37,13 +37,13 @@ func setupTestHandler(channels []*models.Channel) (*Handler, *cache.Store, app.E
 
 	bus := eventbus.NewMemoryBus()
 	logger, _ := zap.NewDevelopment()
-	pool := relayupstream.NewTransportPool(100, 10, 30*time.Second)
+	pool := relayupstream.NewTransportPool(100, 10, 30*time.Second, relayupstream.KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3})
 	cfg := &config.AgentRuntimeConfig{
 		Runtime: config.RuntimeConfig{RetryMax: 3},
 		Relay:   config.RelayConfig{Timeout: 30},
 	}
 	agentApp := agentappkg.NewDefaultAgentApplication(store, nil, logger, cfg, pool)
-	handler := NewHandler(bus, agentApp, TestDispatcherFactory(agentApp))
+	handler := NewHandler(bus, agentApp, TestDispatcherFactory(agentApp), nil)
 	return handler, store, bus
 }
 

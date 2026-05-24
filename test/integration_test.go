@@ -190,13 +190,13 @@ func TestEndToEndFlow(t *testing.T) {
 	rep := reporter.New(agentBus, client, logger, 100, 1*time.Second, "test-agent")
 	rep.Start(ctx)
 
-	pool := upstream.NewTransportPool(100, 10, 30*time.Second)
+	pool := upstream.NewTransportPool(100, 10, 30*time.Second, upstream.KeepaliveConfig{Idle: 15 * time.Second, Interval: 15 * time.Second, Count: 3})
 	relayCfg := &config.AgentRuntimeConfig{
 		Runtime: config.RuntimeConfig{RetryMax: 3},
 		Relay:   config.RelayConfig{Timeout: 30},
 	}
 	agentApp := agentappkg.NewDefaultAgentApplication(store, nil, logger, relayCfg, pool)
-	relayHandler := agentrelay.NewHandler(agentBus, agentApp, backend.NewDispatcher(agentApp))
+	relayHandler := agentrelay.NewHandler(agentBus, agentApp, backend.NewDispatcher(agentApp), nil)
 
 	// Create agent's HTTP router
 	agentRouter := gin.New()

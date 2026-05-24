@@ -70,82 +70,89 @@ export function EntityPicker({
     setOpen(false);
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClear = () => {
     onChange("");
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn("w-full justify-between font-normal text-body", className)}
+    <div className={cn("relative", className)}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className="w-full h-full justify-between font-normal text-body"
+          >
+            <span
+              className={cn(
+                "truncate",
+                !selectedLabel && "text-muted-foreground",
+                value && !disabled && "pr-6",
+              )}
+            >
+              {displayLabel}
+            </span>
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder={t("searchPlaceholder")}
+              value={search}
+              onValueChange={setSearch}
+            />
+            {showScope && (
+              <>
+                <div className="px-2 py-2">
+                  <AdminScopeToggle value={scope === "all" ? "global" : "self"} onChange={(v) => setScope(v === "global" ? "all" : "self")} />
+                </div>
+                <CommandSeparator />
+              </>
+            )}
+            <CommandList>
+              {list.isLoading ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  {t("loading")}
+                </div>
+              ) : items.length === 0 ? (
+                <CommandEmpty>{t("noResults")}</CommandEmpty>
+              ) : (
+                items.map((item) => {
+                  const itemValue = adapter.getValue(item);
+                  return (
+                    <CommandItem
+                      key={itemValue}
+                      value={itemValue}
+                      onSelect={() => handleSelect(itemValue)}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 size-4",
+                          value === itemValue ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      {adapter.renderItem ? adapter.renderItem(item) : adapter.getLabel(item)}
+                    </CommandItem>
+                  );
+                })
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && !disabled && (
+        <button
+          type="button"
+          aria-label={t("clear")}
+          onClick={handleClear}
+          className="absolute right-9 top-1/2 -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground"
         >
-          <span className={cn("truncate", !selectedLabel && "text-muted-foreground")}>
-            {displayLabel}
-          </span>
-          <div className="ml-2 flex shrink-0 items-center gap-1">
-            {value && !disabled && (
-              <X
-                role="button"
-                aria-label={t("clear")}
-                onClick={handleClear}
-                className="size-4 opacity-50 hover:opacity-100"
-              />
-            )}
-            <ChevronsUpDown className="size-4 opacity-50" />
-          </div>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder={t("searchPlaceholder")}
-            value={search}
-            onValueChange={setSearch}
-          />
-          {showScope && (
-            <>
-              <div className="px-2 py-2">
-                <AdminScopeToggle value={scope === "all" ? "global" : "self"} onChange={(v) => setScope(v === "global" ? "all" : "self")} />
-              </div>
-              <CommandSeparator />
-            </>
-          )}
-          <CommandList>
-            {list.isLoading ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                {t("loading")}
-              </div>
-            ) : items.length === 0 ? (
-              <CommandEmpty>{t("noResults")}</CommandEmpty>
-            ) : (
-              items.map((item) => {
-                const itemValue = adapter.getValue(item);
-                return (
-                  <CommandItem
-                    key={itemValue}
-                    value={itemValue}
-                    onSelect={() => handleSelect(itemValue)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 size-4",
-                        value === itemValue ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {adapter.renderItem ? adapter.renderItem(item) : adapter.getLabel(item)}
-                  </CommandItem>
-                );
-              })
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          <X className="size-4 opacity-50 hover:opacity-100" />
+        </button>
+      )}
+    </div>
   );
 }

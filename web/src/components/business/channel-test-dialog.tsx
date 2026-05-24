@@ -383,7 +383,7 @@ export function ChannelTestDialog({
               {tc("noData")}
             </div>
           ) : (
-            <Table className="text-body">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50%]">

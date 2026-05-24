@@ -181,8 +181,8 @@ function LogsPageContent() {
         cell: ({ row }) => (
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 px-2"
+            size="xs"
+            className="px-2"
             onClick={() => setRawLog(row.original)}
           >
             {t("viewRawJson")}

@@ -96,7 +96,7 @@ export function Leaderboard<T>({
             {emptyText ?? "No data"}
           </p>
         ) : (
-          <Table className="text-body">
+          <Table>
             <TableHeader>
               <TableRow>
                 {columns.map((col) => (

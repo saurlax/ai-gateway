@@ -62,8 +62,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Agent.Cache.UserCapacity != 20000 {
 		t.Errorf("expected default user_capacity 20000, got %d", cfg.Agent.Cache.UserCapacity)
 	}
-	if cfg.Agent.Cache.NegativeTTLSeconds != 30 {
-		t.Errorf("expected default negative_ttl_seconds 30, got %d", cfg.Agent.Cache.NegativeTTLSeconds)
+	if cfg.Agent.Cache.NegativeTTLSeconds != 600 {
+		t.Errorf("expected default negative_ttl_seconds 600, got %d", cfg.Agent.Cache.NegativeTTLSeconds)
 	}
 	if cfg.Agent.Cache.UserRoutingsCapacity != 5000 {
 		t.Errorf("expected default user_routings_capacity 5000, got %d", cfg.Agent.Cache.UserRoutingsCapacity)

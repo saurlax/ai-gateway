@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/backend/common"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/inflight"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/pipeline/ctxbuild"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/pipeline/exec"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/pipeline/plan"
@@ -46,6 +47,7 @@ type Handler struct {
 	planner   plan.Solver
 	executor  *exec.Executor
 	publisher *publish.Publisher
+	registry  *inflight.Registry
 }
 
 // NewHandler 是规范构造器：
@@ -60,9 +62,10 @@ type Handler struct {
 //
 // bus 入参收窄自 app.Application（17 方法）→ app.EventBus（1 方法），
 // 因为 NewHandler 只需要 EventBus 一项；让测试 stub 不必满足 Application 全集。
-func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher state.Dispatcher) *Handler {
+func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher state.Dispatcher, registry *inflight.Registry) *Handler {
 	h := &Handler{
-		Agent: agentApp,
+		Agent:    agentApp,
+		registry: registry,
 	}
 
 	var logger *zap.Logger
@@ -90,11 +93,28 @@ func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher stat
 func (h *Handler) Relay(c *gin.Context) {
 	rctx := h.newRelayContext(c)
 
+	if h.registry != nil {
+		rctx.Inflight = h.registry.Track(inflight.Meta{
+			ReqID:     c.GetHeader("X-Request-Id"),
+			StartTime: rctx.State.Recorder.StartedAt(),
+		})
+		defer rctx.Inflight.Done()
+		rctx.State.Recorder.SetStageHook(func(s trace.Stage) {
+			rctx.Inflight.SetStage(string(s))
+		})
+	}
+
 	if err := ctxbuild.Build(rctx); err != nil {
 		rctx.State.Err, rctx.State.FailPhase = err, state.PhaseCtxBuild
 		h.finishRelay(rctx)
 		return
 	}
+
+	if rctx.Inflight != nil {
+		rctx.Inflight.SetModel(rctx.Input.Model)
+		rctx.Inflight.SetStream(rctx.Input.IsStream)
+	}
+
 	if err := h.planner.Solve(rctx); err != nil {
 		rctx.State.Err, rctx.State.FailPhase = err, state.PhasePlan
 		// Solver 的 4 个 sentinel 失败路径（ErrNoRoutableModel / ErrNoChannelAvailable /

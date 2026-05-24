@@ -423,6 +423,8 @@ func (s *Server) setupRoutes() {
 	auth.GET("/agents/:id/detail", api.Adapt(adapter, api.BindURI, agentH.Detail))
 	auth.POST("/agents/:id/connectivity", api.Adapt(adapter, api.BindURI, agentH.CheckConnectivity))
 	auth.GET("/agents/:id/connectivity", api.Adapt(adapter, api.BindURI, agentH.GetConnectivity))
+	auth.GET("/agents/inflight", api.Adapt(adapter, api.BindQuery, agentH.GetInflight))
+	auth.GET("/agents/goroutines", api.Adapt(adapter, api.BindQuery, agentH.GetGoroutines))
 
 	agentRouteH := &agent_route.Handler{}
 	auth.GET("/agent-routes", api.Adapt(adapter, api.BindQuery, agentRouteH.List))
@@ -670,6 +672,22 @@ func (s *Server) startVersionPersistence(ctx context.Context) {
 	}()
 }
 
+// buildEmbeddedAgentConfig 由 master 配置派生内嵌 agent 的运行配置。
+// 可下发字段(LogLevel/Relay/Runtime/Agent.Cache 等)从 master 配置透传;
+// 引导/身份字段(Listen/MasterURL)由 master 现场决定。
+func buildEmbeddedAgentConfig(mc *config.MasterRuntimeConfig, masterListen, listenAddr string) *config.AgentRuntimeConfig {
+	return &config.AgentRuntimeConfig{
+		LogLevel: mc.LogLevel,
+		Agent: config.AgentConfig{
+			Listen:    masterListen,
+			MasterURL: "http://" + listenAddr,
+			Cache:     mc.Agent.Cache,
+		},
+		Runtime: mc.Runtime,
+		Relay:   mc.Relay,
+	}
+}
+
 // setupEmbeddedAgent creates a full agent instance embedded in the master
 // process. The agent connects back to master via WebSocket on localhost,
 // ensuring full feature parity (usage logging, cache sync, etc.).
@@ -682,15 +700,7 @@ func (s *Server) setupEmbeddedAgent(listenAddr string) error {
 	s.Logger.Info("embedded agent ready", zap.String("agent_id", agt.AgentID))
 
 	// Build agent config pointing at this master
-	agentCfg := &config.AgentRuntimeConfig{
-		LogLevel: s.Cfg.LogLevel,
-		Agent: config.AgentConfig{
-			Listen:    s.Cfg.Master.Listen,
-			MasterURL: "http://" + listenAddr,
-		},
-		Runtime: s.Cfg.Runtime,
-		Relay:   s.Cfg.Relay,
-	}
+	agentCfg := buildEmbeddedAgentConfig(s.Cfg, s.Cfg.Master.Listen, listenAddr)
 
 	creds := &enrollment.Credentials{
 		AgentID: agt.AgentID,
@@ -749,7 +759,10 @@ func (s *Server) Run() error {
 		return fmt.Errorf("embedded agent: %w", err)
 	}
 
-	s.httpSrv = &http.Server{Handler: s.Router}
+	s.httpSrv = &http.Server{
+		Handler:           s.Router,
+		ReadHeaderTimeout: 30 * time.Second, // guard against inbound slowloris
+	}
 	s.Logger.Info("master listening", zap.String("addr", ln.Addr().String()))
 	return s.httpSrv.Serve(ln)
 }

@@ -94,7 +94,7 @@ export function CacheStatsTable({ data, mode }: CacheStatsTableProps) {
 
   return (
     <div className="overflow-x-auto">
-      <Table className="min-w-[640px] text-body">
+      <Table className="min-w-[640px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-32">{t("tableEntity")}</TableHead>
@@ -111,7 +111,7 @@ export function CacheStatsTable({ data, mode }: CacheStatsTableProps) {
             const isFullSync = row.capacity === 0;
             return (
               <TableRow key={name}>
-                <TableCell className="font-mono text-xs">{name as CacheEntityName}</TableCell>
+                <TableCell className="font-mono">{name as CacheEntityName}</TableCell>
                 <TableCell className={cn("text-right tabular-nums", hitRateClass(row.hit_rate))}>
                   {row.hit_rate === null ? "—" : formatPercent(row.hit_rate)}
                 </TableCell>

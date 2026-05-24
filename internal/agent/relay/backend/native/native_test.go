@@ -2,6 +2,7 @@ package native
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -506,6 +507,25 @@ func TestHandleNativeError_400_NoProviderType(t *testing.T) {
 	}
 	if upErr.ProviderErrorType != "" {
 		t.Errorf("ProviderErrorType 应为空(无 error.type 字段), got %q", upErr.ProviderErrorType)
+	}
+}
+
+// TestNative_DispatchHonorsCanceledContext 验证已取消的 client context 必须让
+// 上游调用立刻失败，而非永久 hang。
+func TestNative_DispatchHonorsCanceledContext(t *testing.T) {
+	b := &Backend{Agent: nil} // nil agent → BuildHTTPClient 用零值 client，无 transport
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req, _ := http.NewRequest(http.MethodGet, "http://10.255.255.1:9/hang", nil) // 不可路由
+	rec := trace.NewRecorder(false, 0)
+
+	start := time.Now()
+	_, err := b.dispatchUpstream(ctx, req, &models.Channel{ChannelCore: models.ChannelCore{ID: 1}}, rec)
+	if err == nil {
+		t.Fatal("expected error on canceled context")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("canceled context should fail fast, took %v", time.Since(start))
 	}
 }
 

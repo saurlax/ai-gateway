@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -67,6 +68,7 @@ func (stubAgentApp) GetRouteForwarder() RouteForwarder     { return nil }
 func (stubAgentApp) GetLogger() *zap.Logger                { return nil }
 func (stubAgentApp) GetConfig() *config.AgentRuntimeConfig { return nil }
 func (stubAgentApp) GetTransportPool() TransportPool       { return nil }
+func (stubAgentApp) RelayTimeout() time.Duration           { return 0 }
 
 type stubAgentCache struct {
 	stubStore

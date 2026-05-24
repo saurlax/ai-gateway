@@ -18,6 +18,7 @@ import (
 	"github.com/VaalaCat/ai-gateway/internal/agent/enrollment"
 	agentrelay "github.com/VaalaCat/ai-gateway/internal/agent/relay"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/backend"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/inflight"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/upstream"
 	"github.com/VaalaCat/ai-gateway/internal/agent/reporter"
 	"github.com/VaalaCat/ai-gateway/internal/agent/rpc"
@@ -49,6 +50,9 @@ type Server struct {
 	Listener net.Listener
 	httpSrv  *http.Server
 
+	Inflight     *inflight.Registry
+	stopWatchdog func()
+
 	clientMu sync.RWMutex
 	client   *ws.Client
 }
@@ -77,6 +81,13 @@ func New(cfg config.AgentRuntimeProvider, logger *zap.Logger) (*Server, error) {
 	// 避免 Store 在连接建立前因持有 nil client 而 Loader 不可用。
 	s.Store = cache.NewStore(&lazyWSClient{getClient: s.getClient}, runtimeCfg.Agent.Cache)
 	s.Store.SetLogger(s.Logger)
+
+	warnAge := time.Duration(s.Cfg.Runtime.RelayTimeout) * 2 * time.Second
+	if warnAge < 60*time.Second {
+		warnAge = 60 * time.Second
+	}
+	s.Inflight = inflight.NewRegistry(s.Logger.Named("inflight"), warnAge)
+	s.stopWatchdog = s.Inflight.StartWatchdog(10 * time.Second)
 
 	s.Router.Use(gin.Recovery(), ginutil.AbortHandlerRecovery())
 	s.setupRoutes()
@@ -202,7 +213,10 @@ func (s *Server) Run() error {
 	}
 	s.Listener = ln
 
-	s.httpSrv = &http.Server{Handler: s.Router}
+	s.httpSrv = &http.Server{
+		Handler:           s.Router,
+		ReadHeaderTimeout: 30 * time.Second, // guard against inbound slowloris
+	}
 	s.Logger.Info("agent listening",
 		zap.String("addr", ln.Addr().String()),
 		zap.String("agent_id", s.Creds.AgentID),
@@ -232,6 +246,13 @@ func NewEmbedded(cfg config.AgentRuntimeProvider, logger *zap.Logger, creds *enr
 	// lazyWSClient 将 LRU Loader 的 RPC 调用委托给运行时实际连接。
 	s.Store = cache.NewStore(&lazyWSClient{getClient: s.getClient}, runtimeCfg.Agent.Cache)
 	s.Store.SetLogger(s.Logger)
+
+	warnAge := time.Duration(s.Cfg.Runtime.RelayTimeout) * 2 * time.Second
+	if warnAge < 60*time.Second {
+		warnAge = 60 * time.Second
+	}
+	s.Inflight = inflight.NewRegistry(s.Logger.Named("inflight"), warnAge)
+	s.stopWatchdog = s.Inflight.StartWatchdog(10 * time.Second)
 
 	return s, nil
 }
@@ -349,6 +370,9 @@ func (s *Server) RunBackground(ctx context.Context) {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.stopWatchdog != nil {
+		s.stopWatchdog()
+	}
 	if s.httpSrv != nil {
 		return s.httpSrv.Shutdown(ctx)
 	}
@@ -399,6 +423,12 @@ func (s *Server) connectLoop(ctx context.Context) {
 		})
 		client.OnNotification(consts.RPCAgentCheckConnectivity, func(ctx context.Context, params json.RawMessage) (any, error) {
 			return rpc.HandleCheckConnectivity(ctx, params, s.Logger)
+		})
+		client.OnNotification(consts.RPCAgentInflight, func(ctx context.Context, params json.RawMessage) (any, error) {
+			return rpc.HandleInflight(s.Inflight)
+		})
+		client.OnNotification(consts.RPCAgentGoroutines, func(ctx context.Context, params json.RawMessage) (any, error) {
+			return rpc.HandleGoroutines()
 		})
 		client.OnNotification(consts.RPCChannelFetchModels, func(ctx context.Context, params json.RawMessage) (any, error) {
 			return rpc.HandleFetchModels(ctx, params)
@@ -460,6 +490,17 @@ func extractPort(listen string) int {
 	return port
 }
 
+// nonzero 返回 v 本身；若 v<=0 则返回 def。用于将配置零值替换为合理默认。
+// 注意：keepalive 默认值同时也在 config.normalizeRelayConfig 兜底；此处是
+// defense-in-depth（万一某条 config 路径未归一化也不至于让保活退化为零值），
+// 两处默认值需保持一致（15/15/3）。
+func nonzero(v, def int) int {
+	if v <= 0 {
+		return def
+	}
+	return v
+}
+
 // buildRelayHandler 装配 *agentrelay.Handler 并把 transport pool invalidate-on-change
 // 钩子挂到 Store 上：channel 的 ProxyURL 变更时让缓存的 *http.Transport 失效，
 // 否则连接会一直走旧代理。钩子由 server.go 在装配阶段注入，避免 Handler 反向依赖 Store。
@@ -468,6 +509,11 @@ func (s *Server) buildRelayHandler(rf *agentproxy.RouteForwarder, relayTimeout t
 		s.Cfg.Relay.MaxIdleConns,
 		s.Cfg.Relay.MaxIdleConnsPerHost,
 		relayTimeout,
+		upstream.KeepaliveConfig{
+			Idle:     time.Duration(nonzero(s.Cfg.Relay.KeepaliveIdle, 15)) * time.Second,
+			Interval: time.Duration(nonzero(s.Cfg.Relay.KeepaliveInterval, 15)) * time.Second,
+			Count:    nonzero(s.Cfg.Relay.KeepaliveCount, 3),
+		},
 	)
 	if s.Store != nil {
 		s.Store.OnChannelChange(func(old, new *models.Channel) {
@@ -493,7 +539,7 @@ func (s *Server) buildRelayHandler(rf *agentproxy.RouteForwarder, relayTimeout t
 	agentApp := agentappkg.NewDefaultAgentApplication(s.Store, rf, s.Logger, runtimeCfg, pool)
 
 	dispatcher := backend.NewDispatcher(agentApp)
-	return agentrelay.NewHandler(s.Bus, agentApp, dispatcher)
+	return agentrelay.NewHandler(s.Bus, agentApp, dispatcher, s.Inflight)
 }
 
 // lazyWSClient 是 app.WSClient 的延迟代理。

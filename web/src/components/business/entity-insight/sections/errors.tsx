@@ -24,7 +24,7 @@ export function ErrorsSection({ rows }: { rows: ErrorSample[] }) {
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("noErrors")}</p>
         ) : (
-          <Table className="text-body">
+          <Table>
             <TableHeader>
               <TableRow className="text-muted-foreground">
                 <TableHead>{t("errorCol.time")}</TableHead>

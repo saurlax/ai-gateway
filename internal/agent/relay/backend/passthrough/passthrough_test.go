@@ -1,6 +1,7 @@
 package passthrough
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -458,6 +459,26 @@ func TestHandlePassthroughError_400_InvalidRequest(t *testing.T) {
 	}
 	if upErr.ProviderErrorType != "invalid_request_error" {
 		t.Errorf("ProviderErrorType = %q, want invalid_request_error", upErr.ProviderErrorType)
+	}
+}
+
+// TestPassthrough_DispatchHonorsCanceledContext verifies that dispatchUpstream
+// propagates a canceled context to the upstream HTTP call, causing fast failure
+// rather than hanging until a network timeout.
+func TestPassthrough_DispatchHonorsCanceledContext(t *testing.T) {
+	b := &Backend{Agent: nil}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req, _ := http.NewRequest(http.MethodPost, "http://10.255.255.1:9/hang", nil)
+	rec := trace.NewRecorder(false, 0)
+
+	start := time.Now()
+	_, err := b.dispatchUpstream(ctx, req, &models.Channel{ChannelCore: models.ChannelCore{ID: 1}}, rec)
+	if err == nil {
+		t.Fatal("expected error on canceled context")
+	}
+	if time.Since(start) > 2*time.Second {
+		t.Fatalf("canceled context should fail fast, took %v", time.Since(start))
 	}
 }
 

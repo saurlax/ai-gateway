@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -19,6 +20,7 @@ type AgentApplication interface {
 	GetLogger() *zap.Logger
 	GetConfig() *config.AgentRuntimeConfig
 	GetTransportPool() TransportPool
+	RelayTimeout() time.Duration // 非流式请求的总超时；0 表示不限
 }
 
 // AgentCache 在 Store 基础上加 relay 需要的 route 查询能力。

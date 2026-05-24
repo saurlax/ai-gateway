@@ -79,7 +79,7 @@ export function MembersTab({ groupId }: { groupId: number }) {
       id: "actions",
       header: tc("actions"),
       cell: ({ row }) => (
-        <Button variant="ghost" size="sm" asChild>
+        <Button variant="ghost" size="xs" asChild>
           <Link href={`/users?id=${row.original.id}`}>
             <ExternalLink className="size-3.5 mr-1" />
             {t("openInUsers")}

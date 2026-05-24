@@ -45,6 +45,7 @@ type Recorder struct {
 	channelBaseURL string
 
 	failStage Stage
+	stageHook func(Stage) // 可选:每次 WithStage 时回调(供 in-flight 追踪)
 }
 
 // NewRecorder 创建一个 request-scoped Recorder。enabled 控制 Finalize 是否产出
@@ -120,8 +121,23 @@ func (r *Recorder) WithStage(s Stage) *Recorder {
 	}
 	r.currStage = s
 	r.stageBegin = now
+	if r.stageHook != nil {
+		r.stageHook(s)
+	}
 	return r
 }
+
+// SetStageHook 注册一个在每次 WithStage 时触发的回调(用于在途请求阶段追踪)。
+// 传 nil 可清除。nil 接收者安全。
+func (r *Recorder) SetStageHook(fn func(Stage)) {
+	if r == nil {
+		return
+	}
+	r.stageHook = fn
+}
+
+// StartedAt 返回 Recorder 创建时间(请求开始)。
+func (r *Recorder) StartedAt() time.Time { return r.startedAt }
 
 // WithFail 是 Recorder 唯一的失败上报入口。仅记录首次失败（保留根因），
 // 后续调用静默忽略 — 避免 cleanup 阶段次生错误覆盖。

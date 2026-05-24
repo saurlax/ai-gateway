@@ -30,6 +30,24 @@ agent:
   master_url: "http://127.0.0.1:8140"
   enrollment_token: ""
   credentials_file: "./data/agent_credentials.json"
+  # Local entity cache (token / user / routing / private channel). Omit to use defaults.
+  cache:
+    token_capacity: 20000
+    user_capacity: 20000
+    user_routings_capacity: 5000
+    private_channels_capacity: 5000
+    # Negative cache TTL for "not found" lookups.
+    #   0  = use default (600s)
+    #   -1 = disable negative caching
+    #   N  = cache misses for N seconds
+    negative_ttl_seconds: 600
+
+# Upstream relay tuning. Omit this block to use defaults.
+# relay:
+#   timeout: 300              # non-stream total timeout + upstream response-header timeout (seconds)
+#   keepalive_idle: 15        # seconds idle before TCP keepalive probing starts
+#   keepalive_interval: 15    # seconds between keepalive probes
+#   keepalive_count: 3        # unanswered probes before a connection is declared dead (~60s)
 
 # Optional advanced tuning. Omit this entire block unless you need to tune
 # runtime behavior explicitly.

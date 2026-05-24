@@ -33,6 +33,7 @@ export interface ChannelForm {
   proxy_url: string;
   role_mapping: string;
   system_prompt_in_input: boolean;
+  disable_keepalive: boolean;
 }
 
 export const emptyForm: ChannelForm = {
@@ -64,6 +65,7 @@ export const emptyForm: ChannelForm = {
   proxy_url: "",
   role_mapping: "",
   system_prompt_in_input: false,
+  disable_keepalive: false,
 };
 
 export interface EndpointConfig {

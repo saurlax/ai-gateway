@@ -2,6 +2,7 @@ package plan
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/trace"
@@ -92,6 +93,7 @@ func (s *stubAgentApp) GetLogger() *zap.Logger {
 }
 func (s *stubAgentApp) GetConfig() *config.AgentRuntimeConfig { return s.cfg }
 func (s *stubAgentApp) GetTransportPool() app.TransportPool   { return stubTransportPool{} }
+func (s *stubAgentApp) RelayTimeout() time.Duration           { return 0 }
 
 // stubTransportPool 只为满足 TransportPool 接口；测试不调用 Get / Invalidate。
 type stubTransportPool struct{}

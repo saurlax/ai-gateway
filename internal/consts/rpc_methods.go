@@ -11,6 +11,8 @@ const (
 	RPCSyncFetchEntity        = "sync.fetchEntity"
 	RPCAgentHeartbeat         = "agent.heartbeat"
 	RPCAgentCheckConnectivity = "agent.checkConnectivity"
+	RPCAgentInflight          = "agent.inflight"
+	RPCAgentGoroutines        = "agent.goroutines"
 	RPCChannelTest            = "channel.test"
 	RPCChannelFetchModels     = "channel.fetchModels"
 	RPCReportUsage            = "report.usage"

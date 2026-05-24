@@ -80,11 +80,7 @@ func NewStore(client app.WSClient, cfg config.AgentCacheConfig) *Store {
 	}
 	s.logger = zap.NewNop()
 
-	negTTLSec := cfg.NegativeTTLSeconds
-	if negTTLSec <= 0 {
-		negTTLSec = 30
-	}
-	negTTL := time.Duration(negTTLSec) * time.Second
+	negTTL := resolveNegativeTTL(cfg.NegativeTTLSeconds)
 
 	tokenCap := cfg.TokenCapacity
 	if tokenCap <= 0 {
@@ -860,6 +856,22 @@ func (s *Store) OverrideVisiblePrivateChannels(userID uint, channels []protocol.
 // modelInList 检查 model 是否在切片中（精确匹配；不支持通配符——byok 不参与 model_routing 通配语义）。
 func modelInList(model string, list []string) bool {
 	return slices.Contains(list, model)
+}
+
+// resolveNegativeTTL 把 config 层语义翻译成 LRU 层 TTL:
+//
+//	0  → 默认 600s
+//	<0 → 0（LRU 层 0 即禁用负缓存）
+//	>0 → 原值秒
+func resolveNegativeTTL(seconds int) time.Duration {
+	switch {
+	case seconds == 0:
+		return 600 * time.Second
+	case seconds < 0:
+		return 0
+	default:
+		return time.Duration(seconds) * time.Second
+	}
 }
 
 // OnChannelChange 注册一个 channel upsert 时的回调。

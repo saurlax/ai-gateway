@@ -464,3 +464,43 @@ func TestLRUCache_OnEvictNotFiredForNegativeEntry(t *testing.T) {
 		t.Fatalf("OnEvict should not fire for negative entry eviction; got %d", evicted)
 	}
 }
+
+func TestLRU_PositiveSetClearsNegative(t *testing.T) {
+	notFoundLoader := &stubLoader[string, int]{
+		fn: func(_ context.Context, _ string) (int, error) {
+			return 0, ErrNotFound
+		},
+	}
+	c, _ := NewLRUCache[string, int](Config[string, int]{
+		Capacity:    8,
+		NegativeTTL: time.Hour,
+		Loader:      notFoundLoader,
+	})
+	if _, ok, _ := c.Get(context.Background(), "k"); ok {
+		t.Fatal("expected miss")
+	}
+	c.Set("k", 42)
+	v, ok, _ := c.Get(context.Background(), "k")
+	if !ok || v != 42 {
+		t.Fatalf("Set should clear negative; got ok=%v v=%d", ok, v)
+	}
+}
+
+func TestLRU_ApplySetClearsNegative(t *testing.T) {
+	notFoundLoader := &stubLoader[string, int]{
+		fn: func(_ context.Context, _ string) (int, error) {
+			return 0, ErrNotFound
+		},
+	}
+	c, _ := NewLRUCache[string, int](Config[string, int]{
+		Capacity:    8,
+		NegativeTTL: time.Hour,
+		Loader:      notFoundLoader,
+	})
+	c.Get(context.Background(), "k")
+	c.Apply(ActionSet, "k", 7)
+	v, ok, _ := c.Get(context.Background(), "k")
+	if !ok || v != 7 {
+		t.Fatalf("Apply(Set) should clear negative; got ok=%v v=%d", ok, v)
+	}
+}

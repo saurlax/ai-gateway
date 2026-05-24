@@ -251,8 +251,8 @@ export function BYOKSettingsCard() {
 
           {usage.data && usage.data.channels.length > 0 && (
             <div className="max-h-60 overflow-auto rounded-md border">
-              <Table className="text-body">
-                <TableHeader className="bg-muted/40 text-xs uppercase">
+              <Table>
+                <TableHeader className="bg-muted/40">
                   <TableRow>
                     <TableHead className="px-3 py-2 font-medium">
                       {t('deleteBaseURLColOwner')}

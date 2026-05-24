@@ -606,7 +606,9 @@
     "filterByType": "Filter by type",
     "filterByStatus": "Filter by status",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "disableKeepalive": "Disable Connection Reuse",
+    "disableKeepaliveHint": "Only enable for problematic upstreams; each request opens a new connection and closes it immediately"
   },
   "models": {
     "title": "Model Configuration",
@@ -742,7 +744,22 @@
     "noData": "No data",
     "filterByStatus": "Filter by status",
     "statusOnline": "Online",
-    "statusOffline": "Offline"
+    "statusOffline": "Offline",
+    "inflightTitle": "In-Flight Requests",
+    "inflightRefresh": "Refresh",
+    "inflightEmpty": "No in-flight requests",
+    "inflightColModel": "Model",
+    "inflightColStage": "Stage",
+    "inflightColElapsed": "Elapsed",
+    "inflightColStream": "Stream",
+    "inflightColReqId": "Request ID",
+    "inflightColChannel": "Channel",
+    "inflightStreamYes": "Yes",
+    "inflightStreamNo": "No",
+    "inflightSlowHint": "slow",
+    "goroutineDump": "Goroutine Dump",
+    "goroutineDumpTitle": "Goroutine Dump ({count})",
+    "goroutineDumping": "Dumping..."
   },
   "logs": {
     "title": "Usage Logs",

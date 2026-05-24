@@ -344,7 +344,7 @@ export default function AgentsPage() {
           <div className="rounded-md border p-4 space-y-3 mt-3">
             <p className="text-sm text-muted-foreground">{t("usageGuideDesc")}</p>
             <div className="overflow-x-auto">
-              <Table className="text-body">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("headerName")}</TableHead>

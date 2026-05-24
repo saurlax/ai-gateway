@@ -2,6 +2,7 @@ package passthrough
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -46,6 +47,29 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 
 	logger := b.logger()
 
+	// Bind upstream calls to the client request context so that client
+	// disconnection cancels the upstream HTTP call immediately.
+	// For non-stream requests, also apply a hard relay timeout when configured.
+	// Fall back to context.Background() when c.Request is nil (unit-test path).
+	baseCtx := context.Background()
+	if c.Request != nil {
+		baseCtx = c.Request.Context()
+	}
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	if !isStream && rctx.Agent != nil && rctx.Agent.RelayTimeout() > 0 {
+		ctx, cancel = context.WithTimeout(baseCtx, rctx.Agent.RelayTimeout())
+	} else {
+		ctx, cancel = context.WithCancel(baseCtx)
+	}
+	defer cancel()
+
+	if rctx.Inflight != nil {
+		rctx.Inflight.SetChannel(ch.Name)
+	}
+
 	rec.WithStage(trace.StageUpstreamDispatch).WithPassthrough()
 
 	upstreamModel := state.ApplyModelMapping(ch, modelName)
@@ -64,7 +88,7 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 
 	rec.WithOutbound(upstreamReq, newBody, ch)
 
-	resp, err := b.dispatchUpstream(upstreamReq, ch, rec)
+	resp, err := b.dispatchUpstream(ctx, upstreamReq, ch, rec)
 	if err != nil {
 		return state.AttemptResult{Err: err}
 	}
@@ -90,10 +114,11 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 }
 
 // dispatchUpstream 跑 HTTP 请求；失败时通过 Recorder.WithFail 打 trace + 返回 wrapped error。
+// ctx 绑定到请求，使客户端取消或超时能即时传播到上游连接。
 // 与原 inline 写法一致，error 文案保留 "passthrough upstream failed"。
-func (b *Backend) dispatchUpstream(req *http.Request, ch *models.Channel, rec *trace.Recorder) (*http.Response, error) {
+func (b *Backend) dispatchUpstream(ctx context.Context, req *http.Request, ch *models.Channel, rec *trace.Recorder) (*http.Response, error) {
 	client := upstream.BuildHTTPClient(b.transportPool(), ch)
-	resp, err := client.Do(req)
+	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
 		rec.WithFail(trace.StageUpstreamDispatch, err)
 		return nil, fmt.Errorf("passthrough upstream failed: %w", err)
