@@ -179,6 +179,26 @@ export function stringifyResilience(r: ResilienceOverride): string {
   return Object.keys(cleaned).length ? JSON.stringify(cleaned) : "";
 }
 
+/* ── parseAffinity / stringifyAffinity ────────────────────────────────── */
+
+export type AffinityOverride = NonNullable<Channel["affinity"]>;
+
+export function parseAffinity(raw: string): AffinityOverride {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+export function stringifyAffinity(a: AffinityOverride): string {
+  const cleaned = Object.fromEntries(
+    Object.entries(a).filter(([, v]) => v !== undefined && v !== null),
+  );
+  return Object.keys(cleaned).length ? JSON.stringify(cleaned) : "";
+}
+
 /* ── parseLimit / stringifyLimit ──────────────────────────────────────── */
 
 export type ChannelLimit = NonNullable<Channel["limit"]>;
@@ -237,5 +257,6 @@ export function mapChannelToForm(channel: Channel): ChannelForm {
     free: !!channel.free,
     resilience: stringifyResilience(channel.resilience ?? {}),
     limit: stringifyLimit(channel.limit ?? {}),
+    affinity: stringifyAffinity(channel.affinity ?? {}),
   };
 }

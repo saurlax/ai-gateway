@@ -62,22 +62,21 @@ func (p *Publisher) Publish(rctx *state.RelayContext) {
 func (p *Publisher) recordAffinity(rctx *state.RelayContext, e *protocol.UsageLogEntry) {
 	u := rctx.State.Execution.Used
 	if u.Channel == nil {
-		return // 原 fillAffinity 只在 fillExecution 的 u.Channel!=nil 分支被调用
+		return
 	}
 	success := rctx.State.Execution.Err == nil
-
 	if p.affinity == nil || rctx.Input.UserInfo == nil || rctx.Input.UserInfo.UserID == 0 {
 		return
 	}
 	uid := rctx.Input.UserInfo.UserID
-	dec := p.affinity.Decide(affinity.Subject{UserID: uid, RealModel: u.RealModel})
-	// 两者全关 = 粘性整体关闭，直接跳过；只要 Apply 或 Record 任一开启就推导 status，
-	// 是否写记录再由下面的 dec.Record 单独把关。
+	ovr := u.Channel.Affinity.Data()
+	dec := p.affinity.Decide(affinity.Subject{
+		UserID: uid, RealModel: u.RealModel,
+		ChannelEnabled: ovr.Enabled, ChannelTTLSec: ovr.TTLSec,
+	})
 	if !dec.Apply && !dec.Record {
 		return
 	}
-	// AffinityStatus 反映 routing 是否用了粘性 channel，与请求成功/失败无关：
-	// 失败请求一样会标记 hit/fallback/none。只有写记录（AffinityRecorded）才要求 success。
 	switch {
 	case u.ByAffinity:
 		e.AffinityStatus = affinity.StatusHit
@@ -87,7 +86,7 @@ func (p *Publisher) recordAffinity(rctx *state.RelayContext, e *protocol.UsageLo
 		e.AffinityStatus = affinity.StatusNone
 	}
 	if success && dec.Record && (e.CacheReadTokens > 0 || e.CacheWriteTokens > 0) {
-		p.affinity.Remember(affinity.Key{UserID: uid, RealModel: u.RealModel}, u.Source, u.SourceID)
+		p.affinity.Remember(affinity.Key{UserID: uid, RealModel: u.RealModel}, u.Source, u.SourceID, ovr.TTLSec)
 		e.AffinityRecorded = true
 	}
 }

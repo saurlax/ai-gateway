@@ -186,6 +186,11 @@ var (
 // StatusFromState 映射到 HTTP 402 Payment Required。
 var ErrInsufficientQuota = errors.New(consts.ErrInsufficientQuota)
 
+// ErrBYOKOnlyNoChannel 是 byok_only filter 阶段的哨兵 error：
+// token 开启 BYOKOnly 但该模型下无任何可用私有渠道 → planner 返回该 sentinel，
+// StatusFromState 映射到 HTTP 404 Not Found。
+var ErrBYOKOnlyNoChannel = errors.New("no BYOK channel available (token restricted to BYOK only)")
+
 // ErrRateLimited：RequestLimiter 闸门拒绝或排队超时 → StatusFromState 映射 429。
 var ErrRateLimited = errors.New("rate limited")
 

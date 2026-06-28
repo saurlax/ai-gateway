@@ -58,13 +58,20 @@ func (h *Handler) Update(c *app.Context, req UpdateRequest) (models.Token, error
 		if v, ok := updates["trace_enabled"]; ok {
 			allowed["trace_enabled"] = v
 		}
+		if v, ok := updates["byok_only"]; ok {
+			allowed["byok_only"] = v
+		}
 		if v, ok := updates["status"]; ok {
-			if api.StatusEqualsEnabled(v) {
+			// 仅"真·禁用→启用"才需要余额校验。已启用令牌原样重提 status
+			// (例如编辑表单整体回传以改 trace_enabled) 不算启用动作。
+			enabling := api.StatusEqualsEnabled(v) && existing.Status != consts.StatusEnabled
+			if enabling {
 				owner, err := q.User().GetByID(existing.UserID)
 				if err != nil {
 					return models.Token{}, api.InternalError("load token owner failed", err)
 				}
-				if owner.Quota <= 0 {
+				// 余额==0 是"无钱但未欠债"的合法态;只有真欠债(<0)才拦启用。
+				if owner.Quota < 0 {
 					return models.Token{}, api.BadRequestError("insufficient balance, cannot enable token", nil)
 				}
 			}

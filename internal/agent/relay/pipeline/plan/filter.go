@@ -7,6 +7,7 @@ type DropCode int
 const (
 	DropNone DropCode = iota
 	DropInsufficientQuota // → state.ErrInsufficientQuota (402)
+	DropBYOKOnly          // → state.ErrBYOKOnlyNoChannel (404)
 )
 
 type FilterContext struct {

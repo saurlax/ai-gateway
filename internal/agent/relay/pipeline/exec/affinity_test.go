@@ -28,7 +28,7 @@ func (failDispatcher) Dispatch(*state.RelayContext, state.Attempt) state.Attempt
 func TestExecutor_ForgetsAffinityOnHardFailure(t *testing.T) {
 	eng := affinity.New(affStubCfg{})
 	key := affinity.Key{UserID: 1, RealModel: "m"}
-	eng.Remember(key, state.SourceAdmin, 5)
+	eng.Remember(key, state.SourceAdmin, 5, nil)
 
 	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -55,7 +55,7 @@ func TestExecutor_ForgetsAffinityOnHardFailure(t *testing.T) {
 func TestExecutor_AffinityNotForgottenOnSuccess(t *testing.T) {
 	eng := affinity.New(affStubCfg{})
 	key := affinity.Key{UserID: 2, RealModel: "gpt-4"}
-	eng.Remember(key, state.SourceAdmin, 9)
+	eng.Remember(key, state.SourceAdmin, 9, nil)
 
 	plan := state.AttemptPlan{Attempts: []state.Attempt{
 		{Channel: &models.Channel{}, RealModel: "gpt-4", Source: state.SourceAdmin, SourceID: 9, ByAffinity: true},

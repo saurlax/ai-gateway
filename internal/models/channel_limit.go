@@ -12,6 +12,10 @@ const (
 	LimitWindowWeekly      = "weekly"
 	LimitWindowMonthly     = "monthly"
 	LimitWindowRollingDays = "rolling_days"
+
+	// cost 指标的成本口径:raw=折扣前原价(真实成本),billed=折扣后实付额度。空 = raw。
+	CostBasisRaw    = "raw"
+	CostBasisBilled = "billed"
 )
 
 // LimitRule 是单条用量限额规则。Threshold:calls=请求次数;cost=quota 单位(=美元×100000)。
@@ -20,6 +24,7 @@ type LimitRule struct {
 	Window    string `json:"window"`
 	Days      int    `json:"days"`
 	Threshold int64  `json:"threshold"`
+	CostBasis string `json:"cost_basis"` // 仅 metric=="cost" 有意义;空 = raw(折前)
 }
 
 // ChannelLimit 是渠道的用量/时间限额配置(管理员设置)。空 = 不启用自动禁用。
@@ -30,6 +35,10 @@ type ChannelLimit struct {
 }
 
 func validMetric(m string) bool { return m == LimitMetricCalls || m == LimitMetricCost }
+
+func validBasis(b string) bool {
+	return b == "" || b == CostBasisRaw || b == CostBasisBilled
+}
 
 func validWindow(w string) bool {
 	switch w {
@@ -53,6 +62,9 @@ func (l ChannelLimit) Validate() error {
 		}
 		if r.Threshold < 0 {
 			return fmt.Errorf("rule[%d]: threshold must be >= 0, got %d", i, r.Threshold)
+		}
+		if !validBasis(r.CostBasis) {
+			return fmt.Errorf("rule[%d]: invalid cost_basis %q", i, r.CostBasis)
 		}
 		if r.Window == LimitWindowRollingDays && r.Days < 1 {
 			return fmt.Errorf("rule[%d]: rolling_days requires days >= 1, got %d", i, r.Days)

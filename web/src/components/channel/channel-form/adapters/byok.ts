@@ -11,6 +11,7 @@ import {
 } from "@/lib/api/byok-channels";
 import type { ChannelFormAdapter } from "../adapter";
 import { type ChannelForm, emptyForm } from "../types";
+import { parseAffinity, stringifyAffinity } from "../utils";
 
 function csvToArray(csv: string): string[] {
   return csv
@@ -65,6 +66,7 @@ function mapBYOKToForm(pc: BYOKChannelDetail): ChannelForm {
     use_legacy_adaptor: false,
     proxy_url: "",
     header_override: "",
+    affinity: pc.affinity ? stringifyAffinity(pc.affinity) : "",
   };
 }
 
@@ -94,6 +96,9 @@ function buildBYOKCreate(form: ChannelForm) {
     status_code_mapping: form.status_code_mapping,
     other_settings: form.other_settings,
     passthrough_enabled: form.passthrough_enabled,
+    affinity: Object.keys(parseAffinity(form.affinity)).length
+      ? parseAffinity(form.affinity)
+      : undefined,
   };
 }
 
@@ -141,6 +146,9 @@ function buildBYOKUpdate(form: ChannelForm, initial: ChannelForm) {
   if (form.model_mapping !== initial.model_mapping) {
     fields.model_mapping = parseModelMappingJson(form.model_mapping);
   }
+  if (form.affinity !== initial.affinity) {
+    fields.affinity = parseAffinity(form.affinity);
+  }
   const rotateKey = form.key ? form.key : undefined;
   return { fields, rotateKey };
 }
@@ -151,7 +159,7 @@ const BYOK_PERSISTED_FIELDS = [
   "priority", "status", "supported_api_types", "endpoints", "organization",
   "api_version", "system_prompt", "system_prompt_in_input", "role_mapping",
   "param_override", "setting", "tag", "remark", "test_model", "auto_ban",
-  "status_code_mapping", "other_settings", "passthrough_enabled",
+  "status_code_mapping", "other_settings", "passthrough_enabled", "affinity",
 ] as const satisfies ReadonlyArray<keyof ChannelForm>;
 
 // BYOK 隐藏字段：不持久化、表单中不渲染编辑入口。

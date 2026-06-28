@@ -54,6 +54,21 @@ func (h *Handler) Update(c *app.Context, req UpdateRequest) (models.Channel, err
 		updates["resilience"] = datatypes.NewJSONType(rc)
 	}
 
+	if v, ok := updates["affinity"]; ok && v != nil {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return models.Channel{}, api.BadRequestError("invalid affinity", err)
+		}
+		var ca models.ChannelAffinity
+		if err := json.Unmarshal(b, &ca); err != nil {
+			return models.Channel{}, api.BadRequestError("invalid affinity", err)
+		}
+		if err := ca.Validate(); err != nil {
+			return models.Channel{}, api.BadRequestError(err.Error(), err)
+		}
+		updates["affinity"] = datatypes.NewJSONType(ca)
+	}
+
 	if v, ok := updates["price_ratio"]; ok && v != nil {
 		// JSON 数字反序列化成 float64;非数字或越界都拒。
 		f, isNum := v.(float64)

@@ -12,6 +12,7 @@ type TokenTemplate struct {
 	Models            string                    `gorm:"type:text" json:"models"`
 	ExpiryDays        int                       `gorm:"not null;default:-1" json:"expiry_days"`
 	Status            int                       `gorm:"not null;default:1" json:"status"`
+	BYOKOnly          bool                      `gorm:"not null;default:false" json:"byok_only"`
 	AllowedChannelIDs datatypes.JSONSlice[uint] `gorm:"type:text" json:"allowed_channel_ids"`
 	AllowedGroupIDs   datatypes.JSONSlice[uint] `gorm:"type:text" json:"allowed_group_ids"`
 	CreatedAt         int64                     `gorm:"autoCreateTime" json:"created_at"`
@@ -30,6 +31,27 @@ func (t *TokenTemplate) AllowsGroup(groupID uint) bool {
 		}
 	}
 	return false
+}
+
+// SyncFields 标记一次模版→令牌同步要覆盖哪些字段。
+type SyncFields struct {
+	Models   bool
+	Channels bool
+	BYOKOnly bool
+}
+
+// TokenFieldsEqualForFields 只比较 f 选中的字段；未选字段视为相等（不参与差异判定）。
+func TokenFieldsEqualForFields(tpl *TokenTemplate, tok *Token, f SyncFields) bool {
+	if f.Models && !modelsEqual(tpl.Models, tok.Models) {
+		return false
+	}
+	if f.Channels && !channelsEqual([]uint(tpl.AllowedChannelIDs), []uint(tok.AllowedChannelIDs)) {
+		return false
+	}
+	if f.BYOKOnly && tpl.BYOKOnly != tok.BYOKOnly {
+		return false
+	}
+	return true
 }
 
 func TokenFieldsEqual(tplModelsJSON string, tplChannelIDs []uint, tok *Token) bool {

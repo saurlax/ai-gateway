@@ -78,6 +78,7 @@ type channelDelta struct {
 	InputCost        int64
 	OutputCost       int64
 	TotalCost        int64
+	RawCost          int64
 	LastUsedAt       int64
 	UpdatedAt        int64
 }
@@ -244,6 +245,7 @@ func (a *Aggregator) Submit(log *models.UsageLog) {
 		cd.InputCost += log.InputCost
 		cd.OutputCost += log.OutputCost
 		cd.TotalCost += log.TotalCost
+		cd.RawCost += log.RawTotal()
 		if ts > cd.LastUsedAt {
 			cd.LastUsedAt = ts
 		}
@@ -396,6 +398,7 @@ func (a *Aggregator) Flush() error {
 			PromptTokens: v.PromptTokens, CompletionTokens: v.CompletionTokens,
 			CacheReadTokens: v.CacheReadTokens, CacheWriteTokens: v.CacheWriteTokens,
 			InputCost: v.InputCost, OutputCost: v.OutputCost, TotalCost: v.TotalCost,
+			RawCost:    v.RawCost,
 			LastUsedAt: v.LastUsedAt, UpdatedAt: v.UpdatedAt,
 		})
 	}

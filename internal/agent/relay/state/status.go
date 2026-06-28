@@ -38,6 +38,8 @@ func StatusFromState(rctx *RelayContext) (int, string) {
 		return http.StatusPaymentRequired, fmt.Sprintf("insufficient quota for model %s", rctx.Input.Model)
 	case errors.Is(err, ErrModelNotAllowed):
 		return http.StatusNotFound, fmt.Sprintf("model not allowed: %s", rctx.Input.Model)
+	case errors.Is(err, ErrBYOKOnlyNoChannel):
+		return http.StatusNotFound, fmt.Sprintf("no BYOK channel available for model %s (token restricted to BYOK only)", rctx.Input.Model)
 	case errors.Is(err, ErrNoChannelAvailable):
 		// "whitelist active" 后缀在 ErrNoChannelAvailable 路径上由 user info 推断附加，
 		// 复刻老主循环 "no channel available" 文案末尾 (token whitelist active) 的拼接行为。

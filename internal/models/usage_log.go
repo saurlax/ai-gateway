@@ -69,3 +69,20 @@ type UsageLog struct {
 	RateLimitReason   string                            `gorm:"size:256" json:"rate_limit_reason"`
 	RateLimitHits     datatypes.JSONSlice[RateLimitHit] `gorm:"type:text" json:"rate_limit_hits"`
 }
+
+// RawTotal 返回这行 usage_log 的折前原价(四个 Raw* 桶之和)。
+// 四者全 nil 的老行(原价快照特性之前;当时还没有免费/折扣,total==raw)回退 TotalCost。
+// 部分 nil 的桶按 0 计。
+func (l *UsageLog) RawTotal() int64 {
+	if l.RawInputCost == nil && l.RawOutputCost == nil &&
+		l.RawCacheReadCost == nil && l.RawCacheWriteCost == nil {
+		return l.TotalCost
+	}
+	var sum int64
+	for _, p := range []*int64{l.RawInputCost, l.RawOutputCost, l.RawCacheReadCost, l.RawCacheWriteCost} {
+		if p != nil {
+			sum += *p
+		}
+	}
+	return sum
+}

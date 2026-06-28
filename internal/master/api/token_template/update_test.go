@@ -147,3 +147,45 @@ func TestTplUpdate_IllegalZeroChannelID_Reject(t *testing.T) {
 		t.Fatalf("expected 400, got %d (%s)", apiErr.Status, apiErr.Message)
 	}
 }
+
+// TestTplCreate_BYOKOnly_Persists: CreateRequest with BYOKOnly=true must persist
+// the field to the database. This test drives the new CreateRequest.BYOKOnly field
+// and the handler literal assignment.
+func TestTplCreate_BYOKOnly_Persists(t *testing.T) {
+	h, ctx, db := setupTplUpdateTest(t)
+
+	req := CreateRequest{Name: "byok-tpl", BYOKOnly: true}
+	result, err := h.Create(ctx, req)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	var got models.TokenTemplate
+	if err := db.First(&got, result.Value.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if !got.BYOKOnly {
+		t.Errorf("BYOKOnly = false, want true")
+	}
+}
+
+// TestTplUpdate_SetBYOKOnly_Persists: PATCH {"byok_only": true} must persist via
+// the Fields map passthrough to GORM (no handler code change required).
+func TestTplUpdate_SetBYOKOnly_Persists(t *testing.T) {
+	h, ctx, db := setupTplUpdateTest(t)
+	tpl := seedTpl(t, db, nil)
+
+	req := UpdateRequest{ID: strconv.FormatUint(uint64(tpl.ID), 10)}
+	req.SetBodyMap(map[string]any{"byok_only": true})
+
+	if _, err := h.Update(ctx, req); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	var got models.TokenTemplate
+	if err := db.First(&got, tpl.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if !got.BYOKOnly {
+		t.Errorf("BYOKOnly = false, want true")
+	}
+}

@@ -112,6 +112,7 @@ func (h *privateChannelsVisibleFetchHandler) project(pc *models.PrivateChannel) 
 			OtherSettings:       pc.OtherSettings,
 			CreatedAt:           pc.CreatedAt,
 			UpdatedAt:           pc.UpdatedAt,
+			Affinity:            pc.Affinity,
 		},
 		OwnerID:      pc.OwnerID,
 		KeyPlaintext: plaintext,

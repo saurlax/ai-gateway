@@ -44,6 +44,7 @@ func ProjectPrivateChannelToChannel(pc *protocol.SyncedPrivateChannel) *models.C
 			OtherSettings:       pc.OtherSettings,
 			// CreatedAt 留零值：gorm autoCreateTime 只在 INSERT 时填充，struct literal 给零值不影响读写路径。
 			UpdatedAt: pc.UpdatedAt,
+			Affinity:  pc.Affinity,
 		},
 		Key:          pc.KeyPlaintext,
 		Models:       strings.Join(pc.Models, ","),

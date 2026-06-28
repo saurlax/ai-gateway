@@ -33,9 +33,10 @@ type CreateRequest struct {
 	AutoBan           int               `json:"auto_ban"`
 	StatusCodeMapping string            `json:"status_code_mapping" binding:"omitempty,max=4096"`
 	OtherSettings     string            `json:"other_settings" binding:"omitempty,max=4096"`
-	PassthroughEnabled  bool `json:"passthrough_enabled"`
-	UseLegacyAdaptor    bool `json:"use_legacy_adaptor"`
-	SystemPromptInInput bool `json:"system_prompt_in_input"`
+	PassthroughEnabled  bool                    `json:"passthrough_enabled"`
+	UseLegacyAdaptor    bool                    `json:"use_legacy_adaptor"`
+	SystemPromptInInput bool                    `json:"system_prompt_in_input"`
+	Affinity            *models.ChannelAffinity `json:"affinity,omitempty"`
 }
 
 // UpdateRequest carries patch fields (decoded via BindURIAndBodyMap in router wiring later).
@@ -88,8 +89,9 @@ type DetailResponse struct {
 	AutoBan             int               `json:"auto_ban"`
 	StatusCodeMapping   string            `json:"status_code_mapping"`
 	OtherSettings       string            `json:"other_settings"`
-	CreatedAt           int64             `json:"created_at"`
-	UpdatedAt           int64             `json:"updated_at"`
+	CreatedAt           int64                `json:"created_at"`
+	UpdatedAt           int64                `json:"updated_at"`
+	Affinity            models.ChannelAffinity `json:"affinity"`
 }
 
 func toDetailResponse(pc *models.PrivateChannel) DetailResponse {
@@ -124,5 +126,6 @@ func toDetailResponse(pc *models.PrivateChannel) DetailResponse {
 		OtherSettings:       pc.OtherSettings,
 		CreatedAt:           pc.CreatedAt,
 		UpdatedAt:           pc.UpdatedAt,
+		Affinity:            pc.Affinity.Data(),
 	}
 }

@@ -45,6 +45,7 @@ func TokenAuth(store *cache.Store) gin.HandlerFunc {
 			TokenID:      token.ID,
 			TokenName:    token.Name,
 			TraceEnabled: token.TraceEnabled,
+			BYOKOnly:     token.BYOKOnly,
 		}
 
 		// Parse token models for /v1/models filtering.

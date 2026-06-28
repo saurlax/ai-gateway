@@ -24,6 +24,7 @@ export interface Token {
   models: string;
   template_id?: number;
   trace_enabled: boolean;
+  byok_only?: boolean;
   created_at: number;
   updated_at: number;
   allowed_channel_ids?: number[];
@@ -62,6 +63,10 @@ export interface Channel {
   disable_keepalive?: boolean;
   price_ratio?: number;
   free?: boolean;
+  affinity?: {
+    enabled?: boolean;
+    ttl_sec?: number;
+  };
   resilience?: {
     max_retries?: number;
     backoff_base_ms?: number;
@@ -77,6 +82,7 @@ export interface Channel {
       window: "lifetime" | "daily" | "weekly" | "monthly" | "rolling_days";
       days?: number;
       threshold: number;
+      cost_basis?: "raw" | "billed";
     }>;
   };
   limit_state?: {
@@ -527,6 +533,7 @@ export interface TokenTemplate {
   updated_at: number;
   allowed_channel_ids?: number[];
   allowed_group_ids?: number[];
+  byok_only?: boolean;
 }
 
 export interface UserGroup {
@@ -681,6 +688,8 @@ export interface SyncPreviewItem {
   models_after: string;
   channels_before: number[];
   channels_after: number[];
+  byok_only_before?: boolean;
+  byok_only_after?: boolean;
 }
 
 export interface SyncPreviewResponse {

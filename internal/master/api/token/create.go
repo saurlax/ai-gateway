@@ -33,6 +33,7 @@ func (h *Handler) Create(c *app.Context, req CreateRequest) (api.Created[models.
 		Name:         req.Name,
 		Status:       consts.StatusEnabled,
 		TraceEnabled: req.TraceEnabled,
+		BYOKOnly:     req.BYOKOnly,
 	}
 
 	if scope != nil && !scope.IsAdmin {

@@ -4,6 +4,7 @@ import type { ChannelForm } from "./types";
 export type SectionId =
   | "meta"
   | "routing"
+  | "affinity"
   | "processing"
   | "connection"
   | "resilience"
@@ -15,6 +16,7 @@ export const SECTION_FIELDS: Record<SectionId, ReadonlyArray<keyof ChannelForm>>
     "status", "weight", "priority", "models", "test_model",
     "supported_api_types", "limit", "auto_ban",
   ],
+  affinity: ["affinity"],
   processing: [
     "model_mapping", "system_prompt", "role_mapping", "param_override",
     "header_override", "endpoints", "passthrough_enabled",

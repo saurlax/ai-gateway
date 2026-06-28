@@ -556,6 +556,66 @@ func TestPlanner_MultiModel_RetryMaxNotTruncated(t *testing.T) {
 	}
 }
 
+// byok_only=true + 仅 shared channel（无私有）→ Solve 返回 ErrBYOKOnlyNoChannel。
+func TestSolve_BYOKOnly_NoPrivate_Blocked(t *testing.T) {
+	chs := []*models.Channel{
+		{ChannelCore: models.ChannelCore{ID: 1, Status: consts.StatusEnabled, Weight: 1}},
+	}
+	rctx := newPlannerTestRctx(chs, &app.UserInfo{UserID: 7, BYOKOnly: true}, "gpt-4", 5)
+
+	err := NewSolver(nil).Solve(rctx)
+	if err != state.ErrBYOKOnlyNoChannel {
+		t.Fatalf("err = %v, want state.ErrBYOKOnlyNoChannel", err)
+	}
+	if len(rctx.State.Plan.Attempts) != 0 {
+		t.Errorf("Attempts len = %d, want 0", len(rctx.State.Plan.Attempts))
+	}
+}
+
+// byok_only=false → shared channel 正常进 Attempts（行为不变性）。
+func TestSolve_BYOKOnly_Disabled_SharedKept(t *testing.T) {
+	chs := []*models.Channel{
+		{ChannelCore: models.ChannelCore{ID: 1, Status: consts.StatusEnabled, Weight: 1}},
+		{ChannelCore: models.ChannelCore{ID: 2, Status: consts.StatusEnabled, Weight: 1}},
+	}
+	rctx := newPlannerTestRctx(chs, &app.UserInfo{UserID: 7, BYOKOnly: false}, "gpt-4", 5)
+
+	if err := NewSolver(nil).Solve(rctx); err != nil {
+		t.Fatalf("Solve() err = %v, want nil", err)
+	}
+	if len(rctx.State.Plan.Attempts) != 2 {
+		t.Errorf("Attempts len = %d, want 2 (byok_only off → shared kept)", len(rctx.State.Plan.Attempts))
+	}
+}
+
+// byok_only=true + 有私有渠道 → Solve 成功，Attempts 全部 SourcePrivate。
+// SyncedPrivateChannel 字段构造参照 pool_byok_test.go（至少 ID + enabled status，
+// 让 pool.privateChannelsVisibleToCaller 能投影成候选）。
+func TestSolve_BYOKOnly_WithPrivate_OnlyPrivate(t *testing.T) {
+	cache := &stubAgentCache{
+		channels: []*models.Channel{ // shared，应被 byok_only 剔除
+			{ChannelCore: models.ChannelCore{ID: 1, Status: consts.StatusEnabled, Weight: 1}},
+		},
+		privChannels: map[string][]*protocol.SyncedPrivateChannel{
+			"gpt-4": {{ChannelCore: models.ChannelCore{ID: 9, Status: consts.StatusEnabled, Weight: 1}}},
+		},
+		settings: settings.AgentSettings{RetryMaxChannels: 5},
+	}
+	rctx := withRequest(newTestRelayContext(cache, "gpt-4", &app.UserInfo{UserID: 7, BYOKOnly: true}, 0))
+
+	if err := NewSolver(nil).Solve(rctx); err != nil {
+		t.Fatalf("Solve() err = %v, want nil", err)
+	}
+	if len(rctx.State.Plan.Attempts) == 0 {
+		t.Fatal("Attempts empty, want >=1 private")
+	}
+	for _, a := range rctx.State.Plan.Attempts {
+		if a.Source != state.SourcePrivate {
+			t.Errorf("Attempt.Source = %v, want SourcePrivate", a.Source)
+		}
+	}
+}
+
 // TestPlanner_MultiModel_RetryMaxExactBoundary:
 // 边界 case：RetryMax 正好 = 链 ×  channel 总数（4）→ 全填，不截断也不溢出。
 // 链 [A,B] 每 model 2 channel + RetryMax=4 → 期望 4 个 attempt。

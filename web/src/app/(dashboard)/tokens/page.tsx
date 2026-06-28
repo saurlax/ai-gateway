@@ -55,6 +55,7 @@ import { useBillingOverview, useTokenBilling } from "@/lib/api/billing";
 import { formatErrorToast } from "@/lib/api/error-toast";
 import { buildQuery } from "@/lib/api/client";
 import { useTokens, useCreateToken, useUpdateToken, useDeleteToken } from "@/lib/api/tokens";
+import { useEnabledTokenTemplates } from "@/lib/api/token-templates";
 import { useAuth } from "@/lib/auth";
 import { PAGE_SIZES } from "@/lib/constants";
 import { parseModels, serializeModels } from "@/lib/parse-models";
@@ -195,13 +196,14 @@ function TokensPageContent() {
   const createMutation = useCreateToken();
   const updateMutation = useUpdateToken();
   const deleteMutation = useDeleteToken();
+  const { data: enabledTemplatesData } = useEnabledTokenTemplates();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editItem, setEditItem] = useState<Token | null>(null);
   const [deleteItem, setDeleteItem] = useState<Token | null>(null);
 
-  const [createForm, setCreateForm] = useState({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, allowed_channel_ids: [] as number[] });
-  const [editForm, setEditForm] = useState({ user_id: "", name: "", status: "1", expired_at: "", models: "", trace_enabled: false, allowed_channel_ids: [] as number[] });
+  const [createForm, setCreateForm] = useState({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, byok_only: false, allowed_channel_ids: [] as number[] });
+  const [editForm, setEditForm] = useState({ user_id: "", name: "", status: "1", expired_at: "", models: "", trace_enabled: false, byok_only: false, allowed_channel_ids: [] as number[] });
   const [weakKeyConfirmOpen, setWeakKeyConfirmOpen] = useState(false);
   const [pendingWeakKeyCreate, setPendingWeakKeyCreate] = useState<null | typeof createForm>(null);
 
@@ -215,6 +217,7 @@ function TokensPageContent() {
         ...(form.models ? { models: form.models } : {}),
         ...(form.template_id ? { template_id: form.template_id } : {}),
         trace_enabled: form.trace_enabled,
+        byok_only: form.byok_only,
         ...(form.allowed_channel_ids.length > 0 ? { allowed_channel_ids: form.allowed_channel_ids } : {}),
       });
     } else {
@@ -222,11 +225,12 @@ function TokensPageContent() {
         name: form.name,
         template_id: form.template_id,
         trace_enabled: form.trace_enabled,
+        byok_only: form.byok_only,
       });
     }
     toast.success(tc("success"));
     setCreateOpen(false);
-    setCreateForm({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, allowed_channel_ids: [] });
+    setCreateForm({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, byok_only: false, allowed_channel_ids: [] });
     setPendingWeakKeyCreate(null);
   };
 
@@ -271,6 +275,7 @@ function TokensPageContent() {
           ...(editForm.expired_at ? { expired_at: Number(editForm.expired_at) } : {}),
           models: editForm.models,
           trace_enabled: editForm.trace_enabled,
+          byok_only: editForm.byok_only,
           allowed_channel_ids: editForm.allowed_channel_ids,
         });
       } else {
@@ -279,6 +284,7 @@ function TokensPageContent() {
           name: editForm.name,
           status: Number(editForm.status),
           trace_enabled: editForm.trace_enabled,
+          byok_only: editForm.byok_only,
         });
       }
       toast.success(tc("success"));
@@ -307,6 +313,7 @@ function TokensPageContent() {
       expired_at: token.expired_at ? String(token.expired_at) : "",
       models: token.models ?? "",
       trace_enabled: token.trace_enabled,
+      byok_only: token.byok_only ?? false,
       allowed_channel_ids: token.allowed_channel_ids ?? [],
     });
     setEditItem(token);
@@ -483,7 +490,7 @@ function TokensPageContent() {
             value={filterValues}
             onChange={setFilterValues}
             primaryAction={
-              <Button size="sm" onClick={() => { setCreateForm({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, allowed_channel_ids: [] }); setCreateOpen(true); }}>
+              <Button size="sm" onClick={() => { setCreateForm({ user_id: String(user?.user_id ?? ""), name: "", key: "", expired_at: "", models: "", template_id: 0, trace_enabled: false, byok_only: false, allowed_channel_ids: [] }); setCreateOpen(true); }}>
                 <Plus className="mr-2 size-4" />
                 {t("createToken")}
               </Button>
@@ -665,6 +672,18 @@ function TokensPageContent() {
                     }
                   />
                 </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label>{t("byokOnly")}</Label>
+                    <Switch
+                      checked={createForm.byok_only}
+                      onCheckedChange={(checked) =>
+                        setCreateForm({ ...createForm, byok_only: checked })
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("byokOnlyTip")}</p>
+                </div>
               </>
             ) : (
               <>
@@ -680,7 +699,10 @@ function TokensPageContent() {
                   <EntityPicker
                     entity="token-template"
                     value={String(createForm.template_id || "")}
-                    onChange={(v) => setCreateForm({ ...createForm, template_id: Number(v) })}
+                    onChange={(v) => {
+                      const tpl = enabledTemplatesData?.data.find((t) => t.id === Number(v));
+                      setCreateForm({ ...createForm, template_id: Number(v), byok_only: tpl?.byok_only ?? false });
+                    }}
                     placeholder={t("selectTemplate")}
                   />
                 </div>
@@ -692,6 +714,18 @@ function TokensPageContent() {
                       setCreateForm({ ...createForm, trace_enabled: checked })
                     }
                   />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label>{t("byokOnly")}</Label>
+                    <Switch
+                      checked={createForm.byok_only}
+                      onCheckedChange={(checked) =>
+                        setCreateForm({ ...createForm, byok_only: checked })
+                      }
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("byokOnlyTip")}</p>
                 </div>
               </>
             )}
@@ -765,6 +799,18 @@ function TokensPageContent() {
                   setEditForm({ ...editForm, trace_enabled: checked })
                 }
               />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label>{t("byokOnly")}</Label>
+                <Switch
+                  checked={editForm.byok_only}
+                  onCheckedChange={(checked) =>
+                    setEditForm({ ...editForm, byok_only: checked })
+                  }
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">{t("byokOnlyTip")}</p>
             </div>
           </div>
           {isAdmin && editItem && <AgentRouteEditor sourceType="token" sourceId={editItem.id} />}

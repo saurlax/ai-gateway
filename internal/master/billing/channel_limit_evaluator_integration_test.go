@@ -26,7 +26,7 @@ func TestLimitEvaluator_Tick(t *testing.T) {
 		t.Fatalf("seed channel: %v", err)
 	}
 	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
-	if err := db.Create(&models.ChannelDailyBilling{Date: "2026-05-27", ChannelID: ch.ID, RequestCount: 10, TotalCost: 1500}).Error; err != nil {
+	if err := db.Create(&models.ChannelDailyBilling{Date: "2026-05-27", ChannelID: ch.ID, RequestCount: 10, TotalCost: 1500, RawCost: 1500}).Error; err != nil {
 		t.Fatalf("seed billing: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestLimitEvaluator_Tick(t *testing.T) {
 	}
 
 	// 第二轮:把当天用量降到阈值下(模拟窗口重置/回落)→ 应自动恢复
-	db.Model(&models.ChannelDailyBilling{}).Where("channel_id = ?", ch.ID).Update("total_cost", 0)
+	db.Model(&models.ChannelDailyBilling{}).Where("channel_id = ?", ch.ID).Updates(map[string]any{"total_cost": 0, "raw_cost": 0})
 	if err := ev.Tick(now); err != nil {
 		t.Fatalf("Tick2: %v", err)
 	}

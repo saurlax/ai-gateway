@@ -70,6 +70,13 @@ func (h *Handler) Create(c *app.Context, req CreateRequest) (api.Created[DetailR
 		Status:       1,
 	}
 
+	if req.Affinity != nil {
+		if err := req.Affinity.Validate(); err != nil {
+			return api.Created[DetailResponse]{}, api.BadRequestError(err.Error(), err)
+		}
+		pc.Affinity = datatypes.NewJSONType(*req.Affinity)
+	}
+
 	daoCtx := dao.NewContext(c.App)
 	m := dao.NewAdminMutation(daoCtx)
 	if err := m.PrivateChannel().Create(&pc); err != nil {

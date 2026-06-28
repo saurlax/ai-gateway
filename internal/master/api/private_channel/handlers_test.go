@@ -852,6 +852,76 @@ func TestPortalUpdate_SubsetCheckRunsForNonEmptyPatch(t *testing.T) {
 // hardening at Site 1: a malicious endpoints path stored in the DB (e.g. via
 // a "@evil.example" userinfo redirect) must be rejected by codec.JoinUpstreamURL
 // before the bearer key is forwarded.
+// === Task 5: affinity override CRUD + DetailResponse ===
+
+func TestCreate_AffinityPersistedAndExposedInDetail(t *testing.T) {
+	h, ctx, db := newHandlerTestCtx(t)
+	tru := true
+	req := CreateRequest{
+		Name:     "affinity-channel",
+		Type:     1,
+		Key:      "sk-abcdefg",
+		BaseURL:  "https://api.openai.com",
+		Models:   []string{"gpt-4o"},
+		Affinity: &models.ChannelAffinity{Enabled: &tru},
+	}
+	resp, err := h.Create(ctx, req)
+	if err != nil {
+		t.Fatalf("create with affinity: %v", err)
+	}
+	if resp.Value.Affinity.Enabled == nil || !*resp.Value.Affinity.Enabled {
+		t.Fatalf("DetailResponse.Affinity.Enabled not set: %+v", resp.Value.Affinity)
+	}
+	// Also verify DB persisted the affinity.
+	var pc models.PrivateChannel
+	db.First(&pc, resp.Value.ID)
+	if pc.Affinity.Data().Enabled == nil || !*pc.Affinity.Data().Enabled {
+		t.Fatalf("DB affinity not persisted: %+v", pc.Affinity.Data())
+	}
+}
+
+func TestCreate_AffinityInvalidTTLRejected(t *testing.T) {
+	h, ctx, _ := newHandlerTestCtx(t)
+	bad := 99999
+	req := CreateRequest{
+		Name:     "bad-affinity",
+		Type:     1,
+		Key:      "sk-abcdefg",
+		BaseURL:  "https://api.openai.com",
+		Models:   []string{"gpt-4o"},
+		Affinity: &models.ChannelAffinity{TTLSec: &bad},
+	}
+	_, err := h.Create(ctx, req)
+	assertAPIStatus(t, err, http.StatusBadRequest)
+}
+
+func TestPortalUpdate_AffinityRoundTripAndValidation(t *testing.T) {
+	h, ctx, db := newHandlerTestCtx(t)
+	pc := &models.PrivateChannel{ChannelCore: models.ChannelCore{Type: 1}, OwnerID: 1, Name: "x", Status: 1}
+	db.Create(pc)
+
+	// Valid affinity patch persists.
+	tru := true
+	affinityPatch := map[string]any{"enabled": tru}
+	resp, err := h.PortalUpdate(ctx, UpdateRequest{
+		ID:     strconv.FormatUint(uint64(pc.ID), 10),
+		Fields: map[string]any{"affinity": affinityPatch},
+	})
+	if err != nil {
+		t.Fatalf("patch affinity: %v", err)
+	}
+	if resp.Affinity.Enabled == nil || !*resp.Affinity.Enabled {
+		t.Fatalf("affinity not reflected in response: %+v", resp.Affinity)
+	}
+
+	// Invalid ttl_sec in patch rejected.
+	_, err = h.PortalUpdate(ctx, UpdateRequest{
+		ID:     strconv.FormatUint(uint64(pc.ID), 10),
+		Fields: map[string]any{"affinity": map[string]any{"ttl_sec": float64(99999)}},
+	})
+	assertAPIStatus(t, err, http.StatusBadRequest)
+}
+
 func TestPortalTest_JoinUpstreamURL_RejectsMaliciousEndpoint(t *testing.T) {
 	cases := []struct {
 		name      string

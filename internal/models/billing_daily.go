@@ -51,6 +51,7 @@ type ChannelDailyBilling struct {
 	InputCost        int64  `json:"input_cost"`
 	OutputCost       int64  `json:"output_cost"`
 	TotalCost        int64  `json:"total_cost"`
+	RawCost          int64  `json:"raw_cost"` // 折扣前原价日聚合(免费/折扣渠道亦 >0)
 	LastUsedAt       int64  `gorm:"index" json:"last_used_at"`
 	CreatedAt        int64  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt        int64  `gorm:"autoUpdateTime" json:"updated_at"`

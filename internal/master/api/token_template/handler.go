@@ -99,6 +99,7 @@ func (h *Handler) Create(c *app.Context, req CreateRequest) (api.Created[models.
 		Models:     req.Models,
 		ExpiryDays: req.ExpiryDays,
 		Status:     req.Status,
+		BYOKOnly:   req.BYOKOnly,
 	}
 	if req.AllowedChannelIDs != nil {
 		tpl.AllowedChannelIDs = datatypes.JSONSlice[uint](*req.AllowedChannelIDs)

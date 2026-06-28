@@ -300,3 +300,38 @@ func TestTokenAuth_DefaultGroupDisabledFlag_Ignored(t *testing.T) {
 		t.Fatalf("default-disabled should be ignored, got %d", w.Code)
 	}
 }
+
+func TestTokenAuth_PropagatesBYOKOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		flag bool
+	}{
+		{"byok_only true", true},
+		{"byok_only false", false},
+		{"default token (unset → false)", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := cache.NewStore(nil, config.AgentCacheConfig{})
+			store.SetToken(&models.Token{ID: 1, Key: "sk-valid", UserID: 1, Status: 1, ExpiredAt: -1, BYOKOnly: tc.flag})
+
+			gin.SetMode(gin.TestMode)
+			r := gin.New()
+			var got bool
+			r.POST("/test", TokenAuth(store), func(c *gin.Context) {
+				v, _ := c.Get(consts.CtxKeyUserInfo)
+				got = v.(*app.UserInfo).BYOKOnly
+				c.JSON(200, gin.H{"ok": true})
+			})
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest("POST", "/test", strings.NewReader(`{"model":"gpt-4o"}`))
+			req.Header.Set("Authorization", "Bearer sk-valid")
+			req.Header.Set("Content-Type", "application/json")
+			r.ServeHTTP(w, req)
+
+			if got != tc.flag {
+				t.Errorf("UserInfo.BYOKOnly = %v, want %v", got, tc.flag)
+			}
+		})
+	}
+}

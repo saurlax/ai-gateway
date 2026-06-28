@@ -49,16 +49,16 @@ export function useDeleteTokenTemplate() {
 
 export function usePreviewSyncTokenTemplate() {
   return useMutation({
-    mutationFn: (id: number) =>
-      api.post<SyncPreviewResponse>(`/admin/token-templates/${id}/sync-preview`, {}),
+    mutationFn: ({ id, fields }: { id: number; fields: string[] }) =>
+      api.post<SyncPreviewResponse>(`/admin/token-templates/${id}/sync-preview`, { fields }),
   });
 }
 
 export function useSyncTokenTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
-      api.post<TokenTemplateSyncResponse>(`/admin/token-templates/${id}/sync`, {}),
+    mutationFn: ({ id, fields }: { id: number; fields: string[] }) =>
+      api.post<TokenTemplateSyncResponse>(`/admin/token-templates/${id}/sync`, { fields }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["token-templates"] });
       qc.invalidateQueries({ queryKey: ["tokens"] });

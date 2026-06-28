@@ -28,7 +28,7 @@ function UserBody({ item }: { item: User }) {
       {item.email && <Field label={t("email")}>{item.email}</Field>}
       <Field label={t("role")}><RoleBadge role={item.role} /></Field>
       <Field label={t("status")}><StatusBadge status={item.status} /></Field>
-      <Field label={t("balance")}>{formatMoneyCompact(item.quota - item.used_quota)}</Field>
+      <Field label={t("balance")}>{formatMoneyCompact(item.quota)}</Field>
       {item.group_name && <Field label={t("group")}>{item.group_name}</Field>}
     </div>
   );

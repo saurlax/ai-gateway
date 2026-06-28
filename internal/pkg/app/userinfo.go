@@ -10,6 +10,7 @@ type UserInfo struct {
 	TokenID           uint // API Token 认证时填充，JWT 登录时为 0
 	TokenName         string
 	TraceEnabled      bool     // Agent 侧：Token 是否开启 trace
+	BYOKOnly          bool     // Agent 侧：Token 是否限定只用 BYOK/私有渠道
 	TokenModels       []string // Agent 侧：Token 允许的模型列表（空表示不限）
 	AllowedChannelIDs []uint   // Agent 侧：Token 允许的频道列表（空表示不限）
 

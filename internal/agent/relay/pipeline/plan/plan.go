@@ -39,7 +39,7 @@ func NewSolver(aff *affinity.Engine) Solver {
 		Sorter:       priorityWeightedSorter{},
 		Picker:       defaultModePicker{},
 		Affinity:     aff,
-		Filters:      []CandidateFilter{quotaFilter{}},
+		Filters:      []CandidateFilter{byokOnlyFilter{}, quotaFilter{}},
 	}
 }
 
@@ -96,6 +96,7 @@ func (s *defaultSolver) Solve(rctx *state.RelayContext) error {
 
 	whitelistBlockedAny := false
 	quotaBlockedAny := false
+	byokOnlyBlockedAny := false
 	for _, realModel := range chain.Models {
 		if !s.allowedByWhitelist(realModel, rctx.Input.UserInfo) {
 			whitelistBlockedAny = true
@@ -110,6 +111,9 @@ func (s *defaultSolver) Solve(rctx *state.RelayContext) error {
 		cands, dropCode = runFilters(fctx, cands, s.Filters)
 		if dropCode == DropInsufficientQuota {
 			quotaBlockedAny = true
+		}
+		if dropCode == DropBYOKOnly {
+			byokOnlyBlockedAny = true
 		}
 		if len(cands) == 0 {
 			continue
@@ -135,6 +139,9 @@ func (s *defaultSolver) Solve(rctx *state.RelayContext) error {
 		// 返回 402（state.ErrInsufficientQuota），盖过 403 白名单 / 404 无 channel。
 		if quotaBlockedAny {
 			return state.ErrInsufficientQuota
+		}
+		if byokOnlyBlockedAny {
+			return state.ErrBYOKOnlyNoChannel
 		}
 		// 非 routing 路径 + 模型被白名单拦 → "model not allowed: <name>"。
 		// 仅在没有 RoutingName（顶层未走 routing）且整条链都被白名单拦的情况下生效。
@@ -176,9 +183,8 @@ func modelAllowedByWhitelist(model string, ui app.UserInfo) bool {
 	return true
 }
 
-// applyAffinity 若命中粘性记录，把对应 channel 置顶到该 realModel 候选队首并打标。
-// nil engine / 无 UserInfo / Policy 不允许 / Lookup miss 时原样返回。
-// Lookup 命中即置 HadAffinityEntry（即便目标 channel 已被过滤掉——供 publish 区分 fallback）。
+// applyAffinity 命中粘性记录时,按命中候选渠道的每渠道覆盖决定是否置顶。
+// 不再前置全局闸门(支撑"全局关+渠道强制参与");命中候选强制不参与时 Forget 自愈并当作 None。
 func (s *defaultSolver) applyAffinity(rctx *state.RelayContext, realModel string, ordered []ScoredCandidate) []ScoredCandidate {
 	if s.Affinity == nil || rctx.Input.UserInfo == nil {
 		return ordered
@@ -187,18 +193,22 @@ func (s *defaultSolver) applyAffinity(rctx *state.RelayContext, realModel string
 	if uid == 0 {
 		return ordered
 	}
-	if !s.Affinity.Decide(affinity.Subject{UserID: uid, RealModel: realModel}).Apply {
-		return ordered
-	}
 	entry, ok := s.Affinity.Lookup(affinity.Key{UserID: uid, RealModel: realModel})
 	if !ok {
 		return ordered
 	}
-	rctx.State.Plan.HadAffinityEntry = true
 	for i := range ordered {
 		if ordered[i].Source != entry.Source || ordered[i].SourceID != entry.SourceID {
 			continue
 		}
+		// 命中候选:按该渠道覆盖解析是否参与。
+		ovr := ordered[i].Channel.Affinity.Data()
+		if !s.Affinity.Decide(affinity.Subject{UserID: uid, RealModel: realModel, ChannelEnabled: ovr.Enabled}).Apply {
+			// 强制不参与:剔除陈旧记录自愈,当作无记录(None),不设 HadAffinityEntry。
+			s.Affinity.Forget(affinity.Key{UserID: uid, RealModel: realModel})
+			return ordered
+		}
+		rctx.State.Plan.HadAffinityEntry = true
 		out := make([]ScoredCandidate, 0, len(ordered))
 		picked := ordered[i]
 		picked.ByAffinity = true
@@ -210,5 +220,7 @@ func (s *defaultSolver) applyAffinity(rctx *state.RelayContext, realModel string
 		}
 		return out
 	}
+	// 记录存在但渠道被过滤/不在候选:维持 Fallback。
+	rctx.State.Plan.HadAffinityEntry = true
 	return ordered
 }

@@ -2,7 +2,6 @@ package dao
 
 import (
 	"github.com/VaalaCat/ai-gateway/internal/models"
-	"gorm.io/datatypes"
 )
 
 type AdminTokenQuery interface {
@@ -18,7 +17,7 @@ type AdminTokenMutation interface {
 	Update(id uint, updates map[string]any) error
 	Delete(id uint) error
 	DisableAllForUser(userID uint) error
-	BulkSyncFromTemplate(templateID uint, modelsJSON string, channelIDs []uint) (changedIDs []uint, total int, err error)
+	BulkSyncFromTemplate(templateID uint, tpl *models.TokenTemplate, f models.SyncFields) (changedIDs []uint, total int, err error)
 }
 
 type adminTokenQuery struct{ ctx *baseContext }
@@ -88,18 +87,31 @@ func (q *adminTokenQuery) ListByIDs(ids []uint) ([]models.Token, error) {
 	return tokens, err
 }
 
-func (m *adminTokenMutation) BulkSyncFromTemplate(templateID uint, modelsJSON string, channelIDs []uint) ([]uint, int, error) {
+func (m *adminTokenMutation) BulkSyncFromTemplate(templateID uint, tpl *models.TokenTemplate, f models.SyncFields) ([]uint, int, error) {
 	var changedIDs []uint
 	var total int
+	updates := map[string]any{}
+	if f.Models {
+		updates["models"] = tpl.Models
+	}
+	if f.Channels {
+		updates["allowed_channel_ids"] = tpl.AllowedChannelIDs
+	}
+	if f.BYOKOnly {
+		updates["byok_only"] = tpl.BYOKOnly
+	}
 	err := RunInTx[Context](m.ctx, func(txCtx Context) error {
 		var tokens []models.Token
 		if err := txCtx.GetDB().Where("template_id = ?", templateID).Find(&tokens).Error; err != nil {
 			return err
 		}
 		total = len(tokens)
+		if len(updates) == 0 { // 没选任何字段 → 无操作
+			return nil
+		}
 		var toUpdate []uint
 		for i := range tokens {
-			if !models.TokenFieldsEqual(modelsJSON, channelIDs, &tokens[i]) {
+			if !models.TokenFieldsEqualForFields(tpl, &tokens[i], f) {
 				toUpdate = append(toUpdate, tokens[i].ID)
 			}
 		}
@@ -108,10 +120,7 @@ func (m *adminTokenMutation) BulkSyncFromTemplate(templateID uint, modelsJSON st
 		}
 		if err := txCtx.GetDB().Model(&models.Token{}).
 			Where("id IN ?", toUpdate).
-			Updates(map[string]any{
-				"models":              modelsJSON,
-				"allowed_channel_ids": datatypes.JSONSlice[uint](channelIDs),
-			}).Error; err != nil {
+			Updates(updates).Error; err != nil {
 			return err
 		}
 		changedIDs = toUpdate

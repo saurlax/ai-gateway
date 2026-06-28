@@ -1,28 +1,24 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { StatusSelect } from "@/components/business/status-select";
 import { ModelSelectorPanel } from "@/components/business/model-selector-panel";
 import { FetchModelsButton } from "@/components/business/fetch-models-button";
 import { CatalogPickerDialog } from "@/components/business/catalog-picker-dialog";
 import { FieldTip } from "@/components/business/field-tip";
 import { AgentRouteEditor } from "@/components/agent-route-editor";
-import { DateTimePicker } from "@/components/business/date-picker/date-time-picker";
-import { UNIT_QUOTA_SCALE } from "@/lib/utils/format";
 import { ChannelForm } from "../types";
-import { parseSetting, parseLimit, stringifyLimit, ChannelLimit } from "../utils";
+import { parseSetting, parseLimit, stringifyLimit } from "../utils";
+import { LimitRulesEditor } from "../limit-rules-editor";
 
 export interface RoutingSectionProps {
   form: ChannelForm;
@@ -33,11 +29,6 @@ export interface RoutingSectionProps {
   showStatus?: boolean;
   channelId?: number;
 }
-
-type Rule = NonNullable<ChannelLimit["rules"]>[number];
-
-const METRICS: Array<Rule["metric"]> = ["calls", "cost"];
-const WINDOWS: Array<Rule["window"]> = ["lifetime", "daily", "weekly", "monthly", "rolling_days"];
 
 function splitModels(models: string): string[] {
   return models ? models.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -53,189 +44,98 @@ export function RoutingSection({
   channelId,
 }: RoutingSectionProps) {
   const t = useTranslations("channels");
-
-  // Usage limit state
   const limit = parseLimit(form.limit);
-  const rules: Rule[] = limit.rules ?? [];
-
-  const commit = (next: ChannelLimit) => setForm({ ...form, limit: stringifyLimit(next) });
-
-  const updateRule = (idx: number, patch: Partial<Rule>) => {
-    const next = rules.map((r, i) => (i === idx ? { ...r, ...patch } : r));
-    commit({ ...limit, rules: next });
-  };
-  const addRule = () => {
-    const blank: Rule = { metric: "cost", window: "monthly", threshold: 0 };
-    commit({ ...limit, rules: [...rules, blank] });
-  };
-  const removeRule = (idx: number) => {
-    commit({ ...limit, rules: rules.filter((_, i) => i !== idx) });
-  };
-  const thresholdDisplay = (r: Rule): string => {
-    if (r.metric === "cost") return r.threshold ? String(r.threshold / UNIT_QUOTA_SCALE) : "";
-    return r.threshold ? String(r.threshold) : "";
-  };
-  const onThresholdChange = (idx: number, r: Rule, raw: string) => {
-    const n = Number(raw);
-    const v = Number.isNaN(n) ? 0 : n;
-    const threshold = r.metric === "cost" ? Math.round(v * UNIT_QUOTA_SCALE) : Math.round(v);
-    updateRule(idx, { threshold });
-  };
+  const modelCount = splitModels(form.models).length;
+  const ruleCount = (limit.rules ?? []).length;
+  const showLimit = !hiddenFields?.has("limit");
 
   return (
-    <div className="space-y-4">
-      {/* 1. Status (edit mode only) */}
-      {showStatus && (
-        <StatusSelect
-          value={form.status}
-          onChange={(v) => setForm({ ...form, status: v })}
-        />
-      )}
-
-      {/* 2. Models list — variant-aware */}
-      {useModelsCatalog ? (
-        <CatalogModelsListBlock form={form} setForm={setForm} useModelsCatalog={useModelsCatalog} />
-      ) : (
-        <AdminModelsListBlock form={form} setForm={setForm} agentId={agentId} />
-      )}
-
-      {/* 3. Weight + Priority (de-collapsed) */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>{t("weight")}</Label>
-          <Input
-            type="number"
-            min={1}
-            value={form.weight}
-            onChange={(e) => setForm({ ...form, weight: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>{t("priority")}</Label>
-          <Input
-            type="number"
-            value={form.priority}
-            onChange={(e) => setForm({ ...form, priority: e.target.value })}
-          />
-        </div>
-      </div>
-
-      {/* 4. Test Model */}
-      <div className="space-y-2">
-        <Label>
-          {t("testModel")}
-          <FieldTip text={t("testModelTip")} />
-        </Label>
-        <Input
-          value={form.test_model}
-          onChange={(e) => setForm({ ...form, test_model: e.target.value })}
-        />
-      </div>
-
-      {/* 5. Auto Ban */}
-      <div className="flex items-center justify-between">
-        <Label>
-          {t("autoBan")}
-          <FieldTip text={t("autoBanTip")} />
-        </Label>
-        <Switch
-          checked={form.auto_ban === "1"}
-          onCheckedChange={(v) => setForm({ ...form, auto_ban: v ? "1" : "0" })}
-        />
-      </div>
-
-      {/* 6. Usage Limit (de-collapsed, inline) */}
-      {!hiddenFields?.has("limit") && (
-        <div className="space-y-4">
-          <Label>{t("usageLimit")}</Label>
-
-          <p className="text-xs text-muted-foreground">{t("usageLimitHint")}</p>
-
-          <div className="space-y-2">
-            <Label>{t("limitCutoff")}</Label>
-            <DateTimePicker
-              value={limit.disable_at || null}
-              onChange={(v) => commit({ ...limit, disable_at: v ?? 0 })}
-              placeholder={t("limitCutoff")}
+    <Accordion type="multiple" defaultValue={["status", "models", "weight"]} className="rounded-md border">
+      <AccordionItem value="status">
+        <AccordionTrigger className="px-3">{t("routingGroupStatus")}</AccordionTrigger>
+        <AccordionContent className="space-y-4 px-3 pb-3">
+          {showStatus && (
+            <StatusSelect value={form.status} onChange={(v) => setForm({ ...form, status: v })} />
+          )}
+          <div className="flex items-center justify-between">
+            <Label>
+              {t("autoBan")}
+              <FieldTip text={t("autoBanTip")} />
+            </Label>
+            <Switch
+              checked={form.auto_ban === "1"}
+              onCheckedChange={(v) => setForm({ ...form, auto_ban: v ? "1" : "0" })}
             />
-            <p className="text-xs text-muted-foreground">{t("limitCutoffHint")}</p>
           </div>
+        </AccordionContent>
+      </AccordionItem>
 
+      <AccordionItem value="models">
+        <AccordionTrigger className="px-3">
+          <div className="flex flex-1 items-center justify-between pr-2">
+            <span>{t("models")}</span>
+            <span className="text-xs font-normal text-muted-foreground">{modelCount || ""}</span>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent className="space-y-3 px-3 pb-3">
+          {useModelsCatalog ? (
+            <CatalogModelsListBlock form={form} setForm={setForm} useModelsCatalog={useModelsCatalog} />
+          ) : (
+            <AdminModelsListBlock form={form} setForm={setForm} agentId={agentId} />
+          )}
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="weight">
+        <AccordionTrigger className="px-3">{t("routingGroupWeight")}</AccordionTrigger>
+        <AccordionContent className="grid grid-cols-1 gap-4 px-3 pb-3 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label>{t("limitRules")}</Label>
-            {rules.map((r, idx) => (
-              <div key={idx} className="flex flex-wrap items-end gap-2 rounded-md border p-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">{t("limitMetric")}</Label>
-                  <Select value={r.metric} onValueChange={(v) => updateRule(idx, { metric: v as Rule["metric"] })}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {METRICS.map((m) => (
-                        <SelectItem key={m} value={m}>{t(m === "calls" ? "metricCalls" : "metricCost")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">{t("limitWindow")}</Label>
-                  <Select value={r.window} onValueChange={(v) => updateRule(idx, { window: v as Rule["window"] })}>
-                    <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {WINDOWS.map((w) => (
-                        <SelectItem key={w} value={w}>
-                          {t(
-                            w === "lifetime" ? "windowLifetime"
-                            : w === "daily" ? "windowDaily"
-                            : w === "weekly" ? "windowWeekly"
-                            : w === "monthly" ? "windowMonthly"
-                            : "windowRollingDays"
-                          )}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">{t("limitThreshold")}</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="w-32"
-                    value={thresholdDisplay(r)}
-                    onChange={(e) => onThresholdChange(idx, r, e.target.value)}
-                  />
-                </div>
-                {r.window === "rolling_days" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">{t("limitDays")}</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="w-20"
-                      value={r.days ?? ""}
-                      onChange={(e) => updateRule(idx, { days: Math.max(1, Number(e.target.value) || 1) })}
-                    />
-                  </div>
-                )}
-                <Button type="button" variant="ghost" size="icon" onClick={() => removeRule(idx)} aria-label={t("limitDelete")}>
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={addRule}>
-              <Plus className="size-4" /> {t("limitAddRule")}
-            </Button>
+            <Label>{t("weight")}</Label>
+            <Input type="number" min={1} value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} />
           </div>
-        </div>
+          <div className="space-y-2">
+            <Label>{t("priority")}</Label>
+            <Input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} />
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="test">
+        <AccordionTrigger className="px-3">{t("routingGroupTest")}</AccordionTrigger>
+        <AccordionContent className="space-y-2 px-3 pb-3">
+          <Label>
+            {t("testModel")}
+            <FieldTip text={t("testModelTip")} />
+          </Label>
+          <Input value={form.test_model} onChange={(e) => setForm({ ...form, test_model: e.target.value })} />
+        </AccordionContent>
+      </AccordionItem>
+
+      {showLimit && (
+        <AccordionItem value="limit">
+          <AccordionTrigger className="px-3">
+            <div className="flex flex-1 items-center justify-between pr-2">
+              <span>{t("usageLimit")}</span>
+              <span className="text-xs font-normal text-muted-foreground">{ruleCount || ""}</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 px-3 pb-3">
+            <LimitRulesEditor limit={limit} onChange={(next) => setForm({ ...form, limit: stringifyLimit(next) })} />
+          </AccordionContent>
+        </AccordionItem>
       )}
 
-      {/* 7. Agent Route Editor */}
-      {channelId !== undefined ? (
-        <AgentRouteEditor sourceType="channel" sourceId={channelId} />
-      ) : (
-        <p className="text-sm text-muted-foreground">{t("agentRouteCreateHint")}</p>
-      )}
-    </div>
+      <AccordionItem value="agent-route">
+        <AccordionTrigger className="px-3">{t("routingGroupAgentRoute")}</AccordionTrigger>
+        <AccordionContent className="px-3 pb-3">
+          {channelId !== undefined ? (
+            <AgentRouteEditor sourceType="channel" sourceId={channelId} />
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("agentRouteCreateHint")}</p>
+          )}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 

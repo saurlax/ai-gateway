@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { TagInput } from "@/components/ui/tag-input";
 import {
   Dialog,
@@ -26,6 +27,7 @@ export interface TokenTemplateFormValues {
   status: string;
   allowed_channel_ids: number[];
   allowed_group_ids: number[];
+  byok_only: boolean;
 }
 
 const EMPTY: TokenTemplateFormValues = {
@@ -35,6 +37,7 @@ const EMPTY: TokenTemplateFormValues = {
   status: "1",
   allowed_channel_ids: [],
   allowed_group_ids: [],
+  byok_only: false,
 };
 
 function fromTemplate(tpl: TokenTemplate): TokenTemplateFormValues {
@@ -45,6 +48,7 @@ function fromTemplate(tpl: TokenTemplate): TokenTemplateFormValues {
     status: String(tpl.status),
     allowed_channel_ids: tpl.allowed_channel_ids ?? [],
     allowed_group_ids: tpl.allowed_group_ids ?? [],
+    byok_only: tpl.byok_only ?? false,
   };
 }
 
@@ -114,6 +118,15 @@ export function TokenTemplateFormDialog({ open, onOpenChange, template, onSubmit
               onChange={(e) => setForm({ ...form, expiry_days: e.target.value })}
             />
             <p className="text-xs text-muted-foreground">{t("expiryDaysHint")}</p>
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label>{t("byokOnly")}</Label>
+              <Switch
+                checked={form.byok_only}
+                onCheckedChange={(checked) => setForm({ ...form, byok_only: checked })}
+              />
+            </div>
           </div>
           <StatusSelect value={form.status} onChange={(v) => setForm({ ...form, status: v })} />
         </div>

@@ -108,6 +108,7 @@ export default function TokenTemplatesPage() {
         status: Number(values.status),
         allowed_channel_ids: values.allowed_channel_ids.length > 0 ? values.allowed_channel_ids : undefined,
         allowed_group_ids: values.allowed_group_ids.length > 0 ? values.allowed_group_ids : undefined,
+        byok_only: values.byok_only,
       });
       toast.success(tc("success"));
       setCreateOpen(false);
@@ -127,6 +128,7 @@ export default function TokenTemplatesPage() {
         status: Number(values.status),
         allowed_channel_ids: values.allowed_channel_ids,
         allowed_group_ids: values.allowed_group_ids,
+        byok_only: values.byok_only,
       });
       toast.success(tc("success"));
       setEditItem(null);

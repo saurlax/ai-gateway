@@ -71,6 +71,7 @@ type CreateRequest struct {
 	PriceRatio         *float64                  `json:"price_ratio,omitempty"`
 	Free               *bool                     `json:"free,omitempty"`
 	Limit              *models.ChannelLimit      `json:"limit,omitempty"`
+	Affinity           *models.ChannelAffinity   `json:"affinity,omitempty"`
 }
 
 type UpdateRequest struct {

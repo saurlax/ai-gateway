@@ -6,6 +6,7 @@ import (
 
 	"github.com/VaalaCat/ai-gateway/internal/models"
 	"github.com/VaalaCat/ai-gateway/internal/pkg/protocol"
+	"gorm.io/datatypes"
 )
 
 func TestProjectPrivateChannel_Basics(t *testing.T) {
@@ -46,6 +47,16 @@ func TestProjectPrivateChannel_EmptyMappingProducesEmptyString(t *testing.T) {
 	ch := ProjectPrivateChannelToChannel(pc)
 	if ch.ModelMapping != "" {
 		t.Fatalf("empty mapping should produce empty string, got %q", ch.ModelMapping)
+	}
+}
+
+func TestProjectPrivateChannelCarriesAffinity(t *testing.T) {
+	tru := true
+	pc := &protocol.SyncedPrivateChannel{}
+	pc.Affinity = datatypes.NewJSONType(models.ChannelAffinity{Enabled: &tru})
+	ch := ProjectPrivateChannelToChannel(pc)
+	if got := ch.Affinity.Data().Enabled; got == nil || *got != true {
+		t.Fatalf("projection lost affinity: %+v", ch.Affinity.Data())
 	}
 }
 

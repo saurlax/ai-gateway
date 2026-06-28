@@ -2,6 +2,7 @@ package token_template
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/VaalaCat/ai-gateway/internal/consts"
@@ -13,20 +14,46 @@ import (
 	"go.uber.org/zap"
 )
 
-func diffToken(tpl *models.TokenTemplate, tok *models.Token) (bool, PreviewItem) {
-	tplChannels := nonNilUints(tpl.AllowedChannelIDs)
-	tokChannels := nonNilUints(tok.AllowedChannelIDs)
-	if models.TokenFieldsEqual(tpl.Models, tplChannels, tok) {
+func diffToken(tpl *models.TokenTemplate, tok *models.Token, f models.SyncFields) (bool, PreviewItem) {
+	if models.TokenFieldsEqualForFields(tpl, tok, f) {
 		return false, PreviewItem{}
 	}
-	return true, PreviewItem{
-		TokenID:        tok.ID,
-		TokenName:      tok.Name,
-		ModelsBefore:   tok.Models,
-		ModelsAfter:    tpl.Models,
-		ChannelsBefore: tokChannels,
-		ChannelsAfter:  tplChannels,
+	item := PreviewItem{TokenID: tok.ID, TokenName: tok.Name}
+	if f.Models {
+		item.ModelsBefore = tok.Models
+		item.ModelsAfter = tpl.Models
 	}
+	if f.Channels {
+		item.ChannelsBefore = nonNilUints(tok.AllowedChannelIDs)
+		item.ChannelsAfter = nonNilUints(tpl.AllowedChannelIDs)
+	}
+	if f.BYOKOnly {
+		item.BYOKOnlyBefore = tok.BYOKOnly
+		item.BYOKOnlyAfter = tpl.BYOKOnly
+	}
+	return true, item
+}
+
+// parseSyncFields 把请求里的 fields 白名单解析成 SyncFields。
+// 省略或空 → 缺省 {Models, Channels}（向后兼容旧行为，byok_only 不同步）。
+func parseSyncFields(fields []string) (models.SyncFields, error) {
+	if len(fields) == 0 {
+		return models.SyncFields{Models: true, Channels: true}, nil
+	}
+	var f models.SyncFields
+	for _, k := range fields {
+		switch k {
+		case "models":
+			f.Models = true
+		case "channels":
+			f.Channels = true
+		case "byok_only":
+			f.BYOKOnly = true
+		default:
+			return models.SyncFields{}, fmt.Errorf("unknown sync field: %s", k)
+		}
+	}
+	return f, nil
 }
 
 // JSON 序列化时 nil slice 是 null，前端按数组迭代会崩。
@@ -37,8 +64,13 @@ func nonNilUints[T ~[]uint](s T) []uint {
 	return []uint(s)
 }
 
-func (h *Handler) Sync(c *app.Context, req api.IDPathRequest) (SyncResponse, error) {
+func (h *Handler) Sync(c *app.Context, req SyncRequest) (SyncResponse, error) {
 	id, _ := strconv.ParseUint(req.ID, 10, 64)
+
+	f, ferr := parseSyncFields(req.Fields)
+	if ferr != nil {
+		return SyncResponse{}, api.BadRequestError(ferr.Error(), ferr)
+	}
 
 	daoCtx := dao.NewContext(c.App)
 	q := dao.NewAdminQuery(daoCtx)
@@ -49,7 +81,7 @@ func (h *Handler) Sync(c *app.Context, req api.IDPathRequest) (SyncResponse, err
 		return SyncResponse{}, api.NotFoundError(consts.ErrNotFound)
 	}
 
-	changedIDs, total, err := m.Token().BulkSyncFromTemplate(uint(id), tpl.Models, []uint(tpl.AllowedChannelIDs))
+	changedIDs, total, err := m.Token().BulkSyncFromTemplate(uint(id), tpl, f)
 	if err != nil {
 		return SyncResponse{}, api.InternalError("bulk sync failed", err)
 	}
@@ -82,8 +114,13 @@ func publishSyncEvents(ctx context.Context, c *app.Context, q dao.AdminQuery, ch
 	}
 }
 
-func (h *Handler) SyncPreview(c *app.Context, req api.IDPathRequest) (PreviewResponse, error) {
+func (h *Handler) SyncPreview(c *app.Context, req SyncRequest) (PreviewResponse, error) {
 	id, _ := strconv.ParseUint(req.ID, 10, 64)
+
+	f, ferr := parseSyncFields(req.Fields)
+	if ferr != nil {
+		return PreviewResponse{}, api.BadRequestError(ferr.Error(), ferr)
+	}
 
 	daoCtx := dao.NewContext(c.App)
 	q := dao.NewAdminQuery(daoCtx)
@@ -105,7 +142,7 @@ func (h *Handler) SyncPreview(c *app.Context, req api.IDPathRequest) (PreviewRes
 		Items:        []PreviewItem{}, // avoid null in JSON; frontend iterates this field
 	}
 	for i := range tokens {
-		changed, item := diffToken(tpl, &tokens[i])
+		changed, item := diffToken(tpl, &tokens[i], f)
 		if changed {
 			resp.Changed++
 			resp.Items = append(resp.Items, item)

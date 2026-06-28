@@ -56,6 +56,12 @@ func (h *Handler) Create(c *app.Context, req CreateRequest) (api.Created[models.
 		}
 		channel.Limit = datatypes.NewJSONType(*req.Limit)
 	}
+	if req.Affinity != nil {
+		if err := req.Affinity.Validate(); err != nil {
+			return api.Created[models.Channel]{}, api.BadRequestError(err.Error(), err)
+		}
+		channel.Affinity = datatypes.NewJSONType(*req.Affinity)
+	}
 	if channel.Weight == 0 {
 		channel.Weight = 1
 	}

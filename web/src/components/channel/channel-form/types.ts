@@ -39,6 +39,8 @@ export interface ChannelForm {
   /** JSON-serialised ChannelResilience override; "" = all fields use global default. */
   resilience: string;
   limit: string;
+  /** JSON-serialised ChannelAffinity override; "" = inherit global affinity settings. */
+  affinity: string;
 }
 
 export const emptyForm: ChannelForm = {
@@ -75,6 +77,7 @@ export const emptyForm: ChannelForm = {
   free: false,
   resilience: "",
   limit: "",
+  affinity: "",
 };
 
 export interface EndpointConfig {

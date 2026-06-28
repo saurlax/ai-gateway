@@ -1,5 +1,7 @@
 package models
 
+import "gorm.io/datatypes"
+
 // ChannelCore captures the scalar fields that admin Channel, BYOK
 // PrivateChannel, and the master→agent SyncedPrivateChannel projection share
 // verbatim. Fields whose Go type differs between admin (CSV text) and BYOK
@@ -42,4 +44,7 @@ type ChannelCore struct {
 	OtherSettings       string `gorm:"type:text" json:"other_settings"`
 	CreatedAt           int64  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt           int64  `gorm:"autoUpdateTime" json:"updated_at"`
+	// Affinity 是粘性参与/ TTL 的每渠道覆盖。挂在 ChannelCore(而非 admin-only 的
+	// Channel)上,因为这是唯一 admin 与 BYOK 都需要的覆盖;Resilience/Limit 仍是 admin 专属。
+	Affinity datatypes.JSONType[ChannelAffinity] `gorm:"type:text" json:"affinity"`
 }

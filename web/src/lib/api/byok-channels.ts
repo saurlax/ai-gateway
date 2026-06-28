@@ -34,6 +34,10 @@ export interface BYOKChannelDetail {
   auto_ban: number;
   status_code_mapping: string;
   other_settings: string;
+  affinity?: {
+    enabled?: boolean;
+    ttl_sec?: number;
+  };
   created_at: number;
   updated_at: number;
 }

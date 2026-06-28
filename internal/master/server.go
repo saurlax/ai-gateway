@@ -398,8 +398,8 @@ func (s *Server) setupRoutes() {
 	auth.POST("/token-templates", api.Adapt(adapter, api.BindJSON, tplH.Create))
 	auth.PUT("/token-templates/:id", api.Adapt(adapter, api.BindURIAndBodyMap, tplH.Update))
 	auth.DELETE("/token-templates/:id", api.Adapt(adapter, api.BindURI, tplH.Delete))
-	auth.POST("/token-templates/:id/sync-preview", api.Adapt(adapter, api.BindURI, tplH.SyncPreview))
-	auth.POST("/token-templates/:id/sync", api.Adapt(adapter, api.BindURI, tplH.Sync))
+	auth.POST("/token-templates/:id/sync-preview", api.Adapt(adapter, api.BindURIAndOptionalJSON, tplH.SyncPreview))
+	auth.POST("/token-templates/:id/sync", api.Adapt(adapter, api.BindURIAndOptionalJSON, tplH.Sync))
 
 	auth.GET("/invite-codes", api.Adapt(adapter, api.BindQuery, inviteH.AdminList))
 	auth.DELETE("/invite-codes/:id", api.Adapt(adapter, api.BindURI, inviteH.AdminDelete))

@@ -175,9 +175,13 @@ func TestTokenDAO_BulkSyncFromTemplate(t *testing.T) {
 
 	tplModels := `["gpt-4","gpt-5"]`
 	tplChannels := []uint{1, 2}
+	tpl := &models.TokenTemplate{Models: tplModels}
+	tpl.ID = tplID
+	tpl.AllowedChannelIDs = tplChannels
+	syncBothFields := models.SyncFields{Models: true, Channels: true}
 
 	t.Run("returns only changed IDs", func(t *testing.T) {
-		changedIDs, total, err := m.BulkSyncFromTemplate(tplID, tplModels, tplChannels)
+		changedIDs, total, err := m.BulkSyncFromTemplate(tplID, tpl, syncBothFields)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -217,7 +221,7 @@ func TestTokenDAO_BulkSyncFromTemplate(t *testing.T) {
 	})
 
 	t.Run("second call is a no-op (idempotent)", func(t *testing.T) {
-		changedIDs, total, err := m.BulkSyncFromTemplate(tplID, tplModels, tplChannels)
+		changedIDs, total, err := m.BulkSyncFromTemplate(tplID, tpl, syncBothFields)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -230,7 +234,7 @@ func TestTokenDAO_BulkSyncFromTemplate(t *testing.T) {
 	})
 
 	t.Run("template with no tokens returns empty", func(t *testing.T) {
-		changedIDs, total, err := m.BulkSyncFromTemplate(9999, tplModels, tplChannels)
+		changedIDs, total, err := m.BulkSyncFromTemplate(9999, tpl, syncBothFields)
 		if err != nil {
 			t.Fatal(err)
 		}

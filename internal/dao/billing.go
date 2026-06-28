@@ -190,6 +190,7 @@ type ChannelDailyRow struct {
 	InputCost        int64
 	OutputCost       int64
 	TotalCost        int64
+	RawCost          int64
 	LastUsedAt       int64
 	UpdatedAt        int64
 }
@@ -233,17 +234,17 @@ type AdminBillingQuery interface {
 
 // PrivateChannelByModelItem 是 by-model 聚合的单行结果。
 type PrivateChannelByModelItem struct {
-	ModelName    string `json:"model_name"`
-	RequestCount int64  `json:"request_count"`
-	SuccessCount int64  `json:"success_count"`
-	FailedCount  int64  `json:"failed_count"`
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	CacheReadTokens  int64 `json:"cache_read_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens"`
-	InputCost        int64 `json:"input_cost"`
-	OutputCost   int64  `json:"output_cost"`
-	TotalCost    int64  `json:"total_cost"`
+	ModelName        string `json:"model_name"`
+	RequestCount     int64  `json:"request_count"`
+	SuccessCount     int64  `json:"success_count"`
+	FailedCount      int64  `json:"failed_count"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+	CacheReadTokens  int64  `json:"cache_read_tokens"`
+	CacheWriteTokens int64  `json:"cache_write_tokens"`
+	InputCost        int64  `json:"input_cost"`
+	OutputCost       int64  `json:"output_cost"`
+	TotalCost        int64  `json:"total_cost"`
 }
 
 type AdminBillingMutation interface {
@@ -860,6 +861,7 @@ func (m *adminBillingMutation) UpsertChannelDaily(log *models.UsageLog) error {
 		InputCost:        log.InputCost,
 		OutputCost:       log.OutputCost,
 		TotalCost:        log.TotalCost,
+		RawCost:          log.RawTotal(),
 		LastUsedAt:       ts,
 		CreatedAt:        ts,
 		UpdatedAt:        ts,
@@ -885,6 +887,7 @@ func (m *adminBillingMutation) UpsertChannelDaily(log *models.UsageLog) error {
 			"input_cost":         gorm.Expr("input_cost + ?", row.InputCost),
 			"output_cost":        gorm.Expr("output_cost + ?", row.OutputCost),
 			"total_cost":         gorm.Expr("total_cost + ?", row.TotalCost),
+			"raw_cost":           gorm.Expr("raw_cost + ?", row.RawCost),
 			"last_used_at":       updateLastUsedAt(row.LastUsedAt),
 			"updated_at":         row.UpdatedAt,
 		}),
@@ -918,6 +921,7 @@ func (m *adminBillingMutation) BatchUpsertChannelDaily(rows []ChannelDailyRow) e
 				InputCost:        r.InputCost,
 				OutputCost:       r.OutputCost,
 				TotalCost:        r.TotalCost,
+				RawCost:          r.RawCost,
 				LastUsedAt:       r.LastUsedAt,
 				CreatedAt:        r.UpdatedAt,
 				UpdatedAt:        r.UpdatedAt,
@@ -942,6 +946,7 @@ func (m *adminBillingMutation) BatchUpsertChannelDaily(rows []ChannelDailyRow) e
 					"input_cost":         gorm.Expr("input_cost + ?", row.InputCost),
 					"output_cost":        gorm.Expr("output_cost + ?", row.OutputCost),
 					"total_cost":         gorm.Expr("total_cost + ?", row.TotalCost),
+					"raw_cost":           gorm.Expr("raw_cost + ?", row.RawCost),
 					"last_used_at":       updateLastUsedAt(row.LastUsedAt),
 					"updated_at":         row.UpdatedAt,
 				}),

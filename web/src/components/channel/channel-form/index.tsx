@@ -17,6 +17,7 @@ import { MetaSection } from "./sections/meta";
 import { RoutingSection } from "./sections/routing";
 import { ProcessingSection } from "./sections/processing";
 import { ConnectionSection } from "./sections/connection";
+import { AffinitySection } from "./sections/affinity";
 import { ResilienceSection } from "./sections/resilience";
 import { ResponseSection } from "./sections/response";
 
@@ -29,6 +30,7 @@ export interface ChannelFormProps<Entity = unknown> {
 const STAGES: ReadonlyArray<{ id: SectionId; titleKey: string; descKey: string }> = [
   { id: "meta", titleKey: "stageMeta", descKey: "stageMetaDesc" },
   { id: "routing", titleKey: "stageRouting", descKey: "stageRoutingDesc" },
+  { id: "affinity", titleKey: "stageAffinity", descKey: "stageAffinityDesc" },
   { id: "processing", titleKey: "stageProcessing", descKey: "stageProcessingDesc" },
   { id: "connection", titleKey: "stageConnection", descKey: "stageConnectionDesc" },
   { id: "resilience", titleKey: "stageResilience", descKey: "stageResilienceDesc" },
@@ -41,6 +43,8 @@ function stageConfigured(id: SectionId, form: ChannelFormShape): boolean {
     case "routing":
     case "processing":
       return true;
+    case "affinity":
+      return form.affinity !== "";
     case "connection":
       return !!(form.organization || form.api_version || form.proxy_url || form.disable_keepalive);
     case "resilience":
@@ -71,7 +75,7 @@ export function ChannelForm<Entity>({ mode, adapter, agentId }: ChannelFormProps
     return (
       <div className="grid overflow-hidden rounded-lg border md:grid-cols-[200px_1fr]">
         <div className="hidden space-y-2 bg-muted/30 p-3 md:block">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9" />)}
+          {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-9" />)}
         </div>
         <div className="space-y-4 p-6"><Skeleton className="h-6 w-1/3" /><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /></div>
       </div>
@@ -98,6 +102,8 @@ export function ChannelForm<Entity>({ mode, adapter, agentId }: ChannelFormProps
         return <MetaSection<Entity> form={state.form} setForm={state.setForm} channelTypes={channelTypes} hiddenFields={adapter.hiddenFields} keyFieldHelpText={adapter.keyFieldHelpText} entity={state.entity} />;
       case "routing":
         return <RoutingSection form={state.form} setForm={state.setForm} agentId={agentId} useModelsCatalog={adapter.useModelsCatalog} hiddenFields={adapter.hiddenFields} showStatus={mode.kind === "edit"} channelId={channelId} />;
+      case "affinity":
+        return <AffinitySection form={state.form} setForm={state.setForm} />;
       case "processing":
         return <ProcessingSection form={state.form} setForm={state.setForm} channelId={channelId} hiddenFields={adapter.hiddenFields} scriptsHref={adapter.scriptsHref} />;
       case "connection":

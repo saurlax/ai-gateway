@@ -32,6 +32,18 @@ func evaluateLimit(limit models.ChannelLimit, now time.Time, usageFn func(models
 	return false, "", false, nil
 }
 
+// metricValue 按规则的 metric / cost_basis 从窗口用量取对应数值。
+// cost: cost_basis=="billed" 取折后实付额度,否则(raw/空)取折前原价;calls: 取请求次数。
+func metricValue(r models.LimitRule, u dao.ChannelUsage) int64 {
+	if r.Metric == models.LimitMetricCost {
+		if r.CostBasis == models.CostBasisBilled {
+			return u.BilledCost
+		}
+		return u.RawCost
+	}
+	return u.Calls
+}
+
 const (
 	statusEnabled  = 1
 	statusDisabled = 0
@@ -127,14 +139,11 @@ func (e *LimitEvaluator) Tick(now time.Time) error {
 			if e2 != nil {
 				return 0, e2
 			}
-			calls, cost, e2 := q.ChannelWindowUsage(ch.ID, wf)
+			u, e2 := q.ChannelWindowUsage(ch.ID, wf)
 			if e2 != nil {
 				return 0, e2
 			}
-			if r.Metric == models.LimitMetricCost {
-				return cost, nil
-			}
-			return calls, nil
+			return metricValue(r, u), nil
 		}
 		shouldDisable, reason, autoRecover, e2 := evaluateLimit(limit, now, usageFn)
 		if e2 != nil {

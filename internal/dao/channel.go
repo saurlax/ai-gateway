@@ -8,7 +8,7 @@ type AdminChannelQuery interface {
 	ListAll() ([]models.Channel, error)
 	ListByTag(tag string) ([]models.Channel, error)
 	ListEnabled() ([]models.Channel, error)
-	ChannelWindowUsage(channelID uint, wf WindowFilter) (calls int64, cost int64, err error)
+	ChannelWindowUsage(channelID uint, wf WindowFilter) (ChannelUsage, error)
 }
 
 type AdminChannelMutation interface {
@@ -77,7 +77,15 @@ func (m *adminChannelMutation) Delete(id uint) error {
 	return m.ctx.GetDB().Delete(&models.Channel{}, id).Error
 }
 
-func (q *adminChannelQuery) ChannelWindowUsage(channelID uint, wf WindowFilter) (int64, int64, error) {
+// ChannelUsage 是某渠道某窗口的用量汇总。BilledCost=对用户结算后(SUM total_cost),
+// RawCost=折扣前原价(SUM raw_cost),供限额按口径取数。
+type ChannelUsage struct {
+	Calls      int64
+	BilledCost int64
+	RawCost    int64
+}
+
+func (q *adminChannelQuery) ChannelWindowUsage(channelID uint, wf WindowFilter) (ChannelUsage, error) {
 	db := q.ctx.GetDB().Model(&models.ChannelDailyBilling{}).
 		Where("channel_id = ? AND private_channel_id = 0", channelID)
 	switch wf.Kind {
@@ -89,10 +97,13 @@ func (q *adminChannelQuery) ChannelWindowUsage(channelID uint, wf WindowFilter) 
 		// 无日期过滤
 	}
 	var row struct {
-		Calls int64
-		Cost  int64
+		Calls      int64
+		BilledCost int64
+		RawCost    int64
 	}
-	err := db.Select("COALESCE(SUM(request_count),0) AS calls, COALESCE(SUM(total_cost),0) AS cost").
+	err := db.Select("COALESCE(SUM(request_count),0) AS calls, " +
+		"COALESCE(SUM(total_cost),0) AS billed_cost, " +
+		"COALESCE(SUM(raw_cost),0) AS raw_cost").
 		Scan(&row).Error
-	return row.Calls, row.Cost, err
+	return ChannelUsage{Calls: row.Calls, BilledCost: row.BilledCost, RawCost: row.RawCost}, err
 }

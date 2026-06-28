@@ -2,11 +2,13 @@ package private_channel
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 
 	"github.com/VaalaCat/ai-gateway/internal/dao"
 	"github.com/VaalaCat/ai-gateway/internal/master/api"
 	"github.com/VaalaCat/ai-gateway/internal/master/sync"
+	"github.com/VaalaCat/ai-gateway/internal/models"
 	"github.com/VaalaCat/ai-gateway/internal/pkg/app"
 	"go.uber.org/zap"
 	"gorm.io/datatypes"
@@ -76,6 +78,23 @@ func (h *Handler) PortalUpdate(c *app.Context, req UpdateRequest) (DetailRespons
 		GroupID: c.UserInfo.GroupID,
 	}); err != nil {
 		return DetailResponse{}, err
+	}
+
+	// Affinity round-trip: marshal→unmarshal to canonical type, then Validate.
+	// Must run BEFORE normalizeJSONColumns (which only handles models/model_mapping).
+	if v, ok := req.Fields["affinity"]; ok && v != nil {
+		b, err := json.Marshal(v)
+		if err != nil {
+			return DetailResponse{}, api.BadRequestError("invalid affinity", err)
+		}
+		var ca models.ChannelAffinity
+		if err := json.Unmarshal(b, &ca); err != nil {
+			return DetailResponse{}, api.BadRequestError("invalid affinity", err)
+		}
+		if err := ca.Validate(); err != nil {
+			return DetailResponse{}, api.BadRequestError(err.Error(), err)
+		}
+		req.Fields["affinity"] = datatypes.NewJSONType(ca)
 	}
 
 	// Normalize PATCH 里的强类型 JSON 列。必须在 validators 之后——validators

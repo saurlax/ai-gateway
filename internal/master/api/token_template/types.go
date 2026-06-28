@@ -17,6 +17,7 @@ type CreateRequest struct {
 	Status            int     `json:"status"`
 	AllowedChannelIDs *[]uint `json:"allowed_channel_ids"`
 	AllowedGroupIDs   *[]uint `json:"allowed_group_ids"`
+	BYOKOnly          bool    `json:"byok_only"`
 }
 
 type UpdateRequest struct {
@@ -35,6 +36,13 @@ type PreviewItem struct {
 	ModelsAfter    string `json:"models_after"`
 	ChannelsBefore []uint `json:"channels_before"`
 	ChannelsAfter  []uint `json:"channels_after"`
+	BYOKOnlyBefore bool   `json:"byok_only_before"`
+	BYOKOnlyAfter  bool   `json:"byok_only_after"`
+}
+
+type SyncRequest struct {
+	ID     string   `uri:"id" binding:"required"`
+	Fields []string `json:"fields"`
 }
 
 type PreviewResponse struct {

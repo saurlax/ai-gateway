@@ -200,8 +200,8 @@ func TestUpdate_UserEnableWithBalance_Success(t *testing.T) {
 	}
 }
 
-// 普通用户、余额<=0、status 0->1:被拒(400),token 仍禁用。
-func TestUpdate_UserEnableWithoutBalance_Reject(t *testing.T) {
+// 普通用户、余额==0、status 0->1:放行(0 是无钱但未欠债的合法态)。
+func TestUpdate_UserEnableZeroBalance_Success(t *testing.T) {
 	h, ctx, db := setupTokenUpdateTest(t)
 	seedUserQuota(t, db, 1, 0)
 	tok := seedTokenStatus(t, db, 1, 0)
@@ -210,9 +210,31 @@ func TestUpdate_UserEnableWithoutBalance_Reject(t *testing.T) {
 	req := UpdateRequest{ID: strconv.FormatUint(uint64(tok.ID), 10)}
 	req.SetBodyMap(map[string]any{"status": float64(1)})
 
+	if _, err := h.Update(ctx, req); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	var reloaded models.Token
+	if err := db.First(&reloaded, tok.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Status != 1 {
+		t.Fatalf("expected status 1, got %d", reloaded.Status)
+	}
+}
+
+// 普通用户、余额<0(欠债)、status 0->1:拒绝(400),token 仍禁用。
+func TestUpdate_UserEnableNegativeBalance_Reject(t *testing.T) {
+	h, ctx, db := setupTokenUpdateTest(t)
+	seedUserQuota(t, db, 1, -1)
+	tok := seedTokenStatus(t, db, 1, 0)
+	setScope(ctx, false, 1)
+
+	req := UpdateRequest{ID: strconv.FormatUint(uint64(tok.ID), 10)}
+	req.SetBodyMap(map[string]any{"status": float64(1)})
+
 	_, err := h.Update(ctx, req)
 	if err == nil {
-		t.Fatal("expected 400 for zero balance enable")
+		t.Fatal("expected 400 for negative balance enable")
 	}
 	apiErr, ok := err.(*api.APIError)
 	if !ok {
@@ -227,6 +249,32 @@ func TestUpdate_UserEnableWithoutBalance_Reject(t *testing.T) {
 	}
 	if reloaded.Status != 0 {
 		t.Fatalf("expected status unchanged 0, got %d", reloaded.Status)
+	}
+}
+
+// 用户实际遇到的 bug:令牌本就启用、余额==0、只改 trace_enabled,
+// 前端表单仍恒发 status=1。必须放行,不得误判为"启用动作"。
+func TestUpdate_UserEditTraceOnEnabledTokenZeroBalance_Success(t *testing.T) {
+	h, ctx, db := setupTokenUpdateTest(t)
+	seedUserQuota(t, db, 1, 0)
+	tok := seedTokenStatus(t, db, 1, 1) // 已启用
+	setScope(ctx, false, 1)
+
+	req := UpdateRequest{ID: strconv.FormatUint(uint64(tok.ID), 10)}
+	req.SetBodyMap(map[string]any{"status": float64(1), "trace_enabled": true})
+
+	if _, err := h.Update(ctx, req); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	var reloaded models.Token
+	if err := db.First(&reloaded, tok.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Status != 1 {
+		t.Fatalf("expected status 1, got %d", reloaded.Status)
+	}
+	if !reloaded.TraceEnabled {
+		t.Fatalf("expected trace_enabled true, got false")
 	}
 }
 
@@ -271,5 +319,25 @@ func TestUpdate_AdminEnableWithoutBalance_Success(t *testing.T) {
 	}
 	if reloaded.Status != 1 {
 		t.Fatalf("expected status 1, got %d", reloaded.Status)
+	}
+}
+
+func TestTokenUpdate_NormalUserCanSetBYOKOnly(t *testing.T) {
+	h, ctx, db := setupTokenUpdateTest(t)
+	tok := seedToken(t, db, nil)
+	ctx.Context.Set(consts.CtxKeyRequestScope, &middleware.RequestScope{IsAdmin: false, UserID: tok.UserID})
+
+	req := UpdateRequest{ID: strconv.FormatUint(uint64(tok.ID), 10)}
+	req.SetBodyMap(map[string]any{"byok_only": true})
+
+	if _, err := h.Update(ctx, req); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	var got models.Token
+	if err := db.First(&got, tok.ID).Error; err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if !got.BYOKOnly {
+		t.Errorf("BYOKOnly = false, want true (normal user must be able to set it)")
 	}
 }
