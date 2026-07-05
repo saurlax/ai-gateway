@@ -814,6 +814,15 @@ export interface UsageView {
   fallback_chain?: UsageLog["fallback_chain"];
   rate_limit_hits?: RateLimitHit[];
 }
+
+export interface AttemptInProgress {
+  seq: number;
+  channel_id: number;
+  channel_name: string;
+  source: string;
+  real_model: string;
+}
+
 export interface InflightSnapshot {
   id: number;
   req_id: string;
@@ -822,6 +831,7 @@ export interface InflightSnapshot {
   elapsed_ms: number;
   queued_ms: number;
   queued_reason: string;
+  current_attempt?: AttemptInProgress;
 }
 export interface GlobalInflightRow extends InflightSnapshot {
   agent_id: number;
@@ -845,6 +855,27 @@ export interface LimiterBucketRow {
 }
 export interface LimiterUsageResponse {
   buckets: LimiterBucketRow[];
+  failed_agents: { agent_id: number; agent_name: string; error: string }[];
+}
+export interface AgentBreakerCell {
+  agent_id: number;
+  agent_name: string;
+  state: string; // "closed" | "open" | "half-open"
+  remaining_ms: number;
+  failures: number;
+  successes: number;
+  failure_rate: number;
+}
+export interface ChannelBreakerRow {
+  source: string;
+  channel_id: number;
+  worst_state: string;
+  open_agents: number;
+  total_agents: number;
+  agents: AgentBreakerCell[];
+}
+export interface BreakerBoardResponse {
+  channels: ChannelBreakerRow[];
   failed_agents: { agent_id: number; agent_name: string; error: string }[];
 }
 export interface AgentHealthRow {

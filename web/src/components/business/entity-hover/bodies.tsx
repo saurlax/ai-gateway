@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { User as UserIcon, Server, KeyRound, Cpu, type LucideIcon } from "lucide-react";
 
 import { StatusBadge, RoleBadge, OnlineBadge } from "@/components/business/status-badge";
 import { ChannelBillingBadge, billingBadge } from "@/components/business/channel-billing-badge";
@@ -27,7 +28,6 @@ function UserBody({ item }: { item: User }) {
     <div className="space-y-1">
       {item.email && <Field label={t("email")}>{item.email}</Field>}
       <Field label={t("role")}><RoleBadge role={item.role} /></Field>
-      <Field label={t("status")}><StatusBadge status={item.status} /></Field>
       <Field label={t("balance")}>{formatMoneyCompact(item.quota)}</Field>
       {item.group_name && <Field label={t("group")}>{item.group_name}</Field>}
     </div>
@@ -38,7 +38,6 @@ function ChannelBody({ item }: { item: Channel }) {
   const t = useTranslations("entityHover");
   return (
     <div className="space-y-1">
-      <Field label={t("status")}><StatusBadge status={item.status} /></Field>
       {billingBadge(item).kind !== "none" && (
         <Field label={t("billing")}><ChannelBillingBadge channel={item} /></Field>
       )}
@@ -57,7 +56,6 @@ function TokenBody({ item }: { item: Token }) {
       <Field label={t("owner")}>
         <EntityLabel entity="user" id={item.user_id} hover={false} />
       </Field>
-      <Field label={t("status")}><StatusBadge status={item.status} /></Field>
       <Field label={t("expiresAt")}>
         {item.expired_at > 0
           ? new Date(item.expired_at * 1000).toLocaleDateString()
@@ -74,7 +72,6 @@ function AgentBody({ item }: { item: Agent }) {
   return (
     <div className="space-y-1">
       <Field label={t("nodeId")}><CopyableText text={item.agent_id} /></Field>
-      <Field label={t("online")}><OnlineBadge lastSeen={item.last_seen} /></Field>
       {tags.length > 0 && <Field label={t("tags")}>{tags.join(", ")}</Field>}
     </div>
   );
@@ -86,4 +83,20 @@ export const ENTITY_HOVER_BODIES: Partial<Record<EntityName, (item: unknown) => 
   channel: (item) => <ChannelBody item={item as Channel} />,
   token: (item) => <TokenBody item={item as Token} />,
   agent: (item) => <AgentBody item={item as Agent} />,
+};
+
+/** 各实体的类型图标(hover 卡头部)。 */
+export const ENTITY_TYPE_ICONS: Partial<Record<EntityName, LucideIcon>> = {
+  user: UserIcon,
+  channel: Server,
+  token: KeyRound,
+  agent: Cpu,
+};
+
+/** 各实体的状态元素(提到 hover 卡头部做 pill)。访问器只返回元素,不直接调 hook。 */
+export const ENTITY_HOVER_STATUS: Partial<Record<EntityName, (item: unknown) => ReactNode>> = {
+  user: (i) => <StatusBadge status={(i as User).status} />,
+  channel: (i) => <StatusBadge status={(i as Channel).status} />,
+  token: (i) => <StatusBadge status={(i as Token).status} />,
+  agent: (i) => <OnlineBadge lastSeen={(i as Agent).last_seen} />,
 };

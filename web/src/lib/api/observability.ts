@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
   AllInflightResponse,
+  BreakerBoardResponse,
   LimiterUsageResponse,
   RecentHealthResponse,
 } from "@/lib/types";
@@ -20,6 +21,15 @@ export function useLimiterUsage() {
     queryKey: ["observability", "limiter-usage"],
     queryFn: () =>
       api.get<LimiterUsageResponse>("/admin/observability/limiter-usage"),
+    refetchInterval: 5000,
+  });
+}
+
+export function useBreakerBoard() {
+  return useQuery({
+    queryKey: ["observability", "breaker-board"],
+    queryFn: () =>
+      api.get<BreakerBoardResponse>("/admin/observability/breaker-board"),
     refetchInterval: 5000,
   });
 }

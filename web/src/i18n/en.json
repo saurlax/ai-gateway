@@ -889,6 +889,7 @@
     "inflightEmpty": "No in-flight requests",
     "inflightColModel": "Model",
     "inflightColStage": "Stage",
+    "inflightColRetry": "Retry",
     "inflightColElapsed": "Elapsed",
     "inflightColStream": "Stream",
     "inflightColReqId": "Request ID",
@@ -982,6 +983,7 @@
     "chainAttempts": "Attempts",
     "chainAdopted": "Adopted",
     "chainSkippedBreaker": "Skipped (breaker open)",
+    "chainInProgress": "In progress",
     "chainBreakerState": "Breaker State",
     "chainRetries": "Retries",
     "rateLimit": {
@@ -1488,7 +1490,23 @@
     "tab": {
       "overview": "Overview",
       "inflight": "In-flight",
-      "limiter": "Rate Limit"
+      "limiter": "Rate Limit",
+      "breaker": "Breakers"
+    },
+    "breaker": {
+      "allHealthy": "All channel breakers healthy",
+      "onlyAbnormal": "Abnormal only",
+      "showAll": "Show all",
+      "agentsTripped": "{open}/{total} nodes tripped",
+      "agentsHealthy": "{total} nodes healthy",
+      "cooldownRemaining": "cooldown {s}s",
+      "failures": "{n} failures",
+      "failedAgents": "{n} nodes failed to query",
+      "state": {
+        "open": "Open",
+        "halfOpen": "Half-open",
+        "closed": "Closed"
+      }
     },
     "liveIndicator": "Live · auto-refresh every 5s",
     "tableEntity": "Entity",

@@ -9,6 +9,7 @@ import (
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/affinity"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/backend/common"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/inflight"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/resilience"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/models"
@@ -56,6 +57,7 @@ type Executor struct {
 func (e *Executor) Run(rctx *state.RelayContext) {
 	rec := rctx.State.Recorder
 	out := &rctx.State.Execution
+	defer rctx.Inflight.ClearCurrentAttempt()
 	attempts := rctx.State.Plan.Attempts
 	if e.Gate != nil {
 		reqLease, err := e.Gate.AcquireRequest(rctx)
@@ -72,6 +74,7 @@ func (e *Executor) Run(rctx *state.RelayContext) {
 		}
 		rec.ResetAttempt()
 		started := time.Now()
+		rctx.Inflight.SetCurrentAttempt(inProgressOf(idx+1, a))
 		res, dispatches := e.runAttempt(rctx, a)
 		durMs := int(time.Since(started).Milliseconds())
 		out.Used = a
@@ -80,6 +83,7 @@ func (e *Executor) Run(rctx *state.RelayContext) {
 		rec.SnapshotAttempt()
 		ar.HasTrace = rec.LastSnapshotVerbose()
 		out.History = append(out.History, ar)
+		rctx.Inflight.UpdateFallbackChain(out.History)
 		if res.Err == nil {
 			return
 		}
@@ -195,6 +199,25 @@ func buildAttemptRecord(seq int, a state.Attempt, res state.AttemptResult, dispa
 		}
 	}
 	return rec
+}
+
+// inProgressOf 把"即将 dispatch 的候选"投影成在途"进行中"标记。
+// 渠道 ID 口径与 buildAttemptRecord 一致:SourceID!=0 用 SourceID,否则 Channel.ID。
+func inProgressOf(seq int, a state.Attempt) *inflight.AttemptInProgress {
+	p := &inflight.AttemptInProgress{
+		Seq:       seq,
+		RealModel: a.RealModel,
+		Source:    string(a.Source),
+	}
+	if a.Channel != nil {
+		p.ChannelName = a.Channel.Name
+		if a.SourceID != 0 {
+			p.ChannelID = a.SourceID
+		} else {
+			p.ChannelID = a.Channel.ID
+		}
+	}
+	return p
 }
 
 func truncateErr(s string) string {

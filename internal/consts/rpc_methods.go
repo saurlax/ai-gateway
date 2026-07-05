@@ -16,6 +16,7 @@ const (
 	RPCAgentGoroutines        = "agent.goroutines"
 	RPCAgentInterrupt         = "agent.interrupt"
 	RPCAgentLimiterUsage      = "agent.limiterUsage"
+	RPCAgentBreakers          = "agent.breakers"
 	RPCChannelTest            = "channel.test"
 	RPCChannelFetchModels     = "channel.fetchModels"
 	RPCReportUsage            = "report.usage"

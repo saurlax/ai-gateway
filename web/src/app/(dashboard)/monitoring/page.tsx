@@ -8,8 +8,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "@/components/monitoring/overview-tab";
 import { InflightTab } from "@/components/monitoring/inflight-tab";
 import { LimiterTab } from "@/components/monitoring/limiter-tab";
+import { BreakerTab } from "@/components/monitoring/breaker-tab";
 
-const TABS = ["overview", "inflight", "limiter"] as const;
+const TABS = ["overview", "inflight", "limiter", "breaker"] as const;
 type TabKey = (typeof TABS)[number];
 
 export default function MonitoringPage() {
@@ -47,6 +48,7 @@ function Inner() {
         <TabsTrigger value="overview">{t("tab.overview")}</TabsTrigger>
         <TabsTrigger value="inflight">{t("tab.inflight")}</TabsTrigger>
         <TabsTrigger value="limiter">{t("tab.limiter")}</TabsTrigger>
+        <TabsTrigger value="breaker">{t("tab.breaker")}</TabsTrigger>
       </TabsList>
       <TabsContent value="overview">
         <OverviewTab />
@@ -56,6 +58,9 @@ function Inner() {
       </TabsContent>
       <TabsContent value="limiter">
         <LimiterTab />
+      </TabsContent>
+      <TabsContent value="breaker">
+        <BreakerTab />
       </TabsContent>
     </Tabs>
   );

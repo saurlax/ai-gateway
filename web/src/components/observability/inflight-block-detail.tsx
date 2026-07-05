@@ -135,8 +135,13 @@ export function InflightBlockDetail({
               />
             )}
 
-            {view.fallback_chain && view.fallback_chain.length > 0 && (
-              <FallbackChain chain={view.fallback_chain} requestId={row.req_id} />
+            {((view.fallback_chain && view.fallback_chain.length > 0) ||
+              row.current_attempt) && (
+              <FallbackChain
+                chain={view.fallback_chain ?? []}
+                requestId={row.req_id}
+                pending={row.current_attempt}
+              />
             )}
           </div>
         )}

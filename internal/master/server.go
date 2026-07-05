@@ -36,9 +36,9 @@ import (
 	"github.com/VaalaCat/ai-gateway/internal/master/api/model"
 	apimodelrouting "github.com/VaalaCat/ai-gateway/internal/master/api/model_routing"
 	apimonitoring "github.com/VaalaCat/ai-gateway/internal/master/api/monitoring"
-	apiobservability "github.com/VaalaCat/ai-gateway/internal/master/api/observability"
 	apioauth "github.com/VaalaCat/ai-gateway/internal/master/api/oauth"
 	apioap "github.com/VaalaCat/ai-gateway/internal/master/api/oauth_provider_admin"
+	apiobservability "github.com/VaalaCat/ai-gateway/internal/master/api/observability"
 	"github.com/VaalaCat/ai-gateway/internal/master/api/private_channel"
 	apiratelimiter "github.com/VaalaCat/ai-gateway/internal/master/api/request_limiter"
 	apiscript "github.com/VaalaCat/ai-gateway/internal/master/api/script"
@@ -464,6 +464,7 @@ func (s *Server) setupRoutes() {
 	auth.POST("/agents/inflight/interrupt", api.Adapt(adapter, api.BindJSON, agentH.Interrupt))
 	auth.GET("/agents/goroutines", api.Adapt(adapter, api.BindQuery, agentH.GetGoroutines))
 	auth.GET("/observability/limiter-usage", api.Adapt(adapter, api.BindNone, obsH.GetLimiterUsage))
+	auth.GET("/observability/breaker-board", api.Adapt(adapter, api.BindNone, obsH.GetBreakerBoard))
 	auth.GET("/observability/recent-health", api.Adapt(adapter, api.BindNone, obsH.GetRecentHealth))
 
 	agentRouteH := &agent_route.Handler{}

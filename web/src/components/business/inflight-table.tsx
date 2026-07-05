@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CopyableText } from "@/components/business/copyable-text";
 import { EntityLabel } from "@/components/business/entity-label";
+import { AttemptDots } from "@/components/business/attempt-dots";
+import { FallbackChainInline } from "@/components/business/attempt-state";
 import type { InflightSnapshot } from "@/lib/types";
 
 export interface InflightRow extends InflightSnapshot {
@@ -43,6 +45,15 @@ interface InflightTableProps {
 export function InflightTable({ rows, showAgent, onInterrupt, onSelectRow, emptyText }: InflightTableProps) {
   const t = useTranslations("agents");
   const [target, setTarget] = useState<InflightRow | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (k: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  const colCount = 8 + (showAgent ? 1 : 0) + (onInterrupt ? 1 : 0);
 
   if (rows.length === 0) {
     return <p className="text-xs text-muted-foreground px-4 py-3">{emptyText}</p>;
@@ -57,6 +68,7 @@ export function InflightTable({ rows, showAgent, onInterrupt, onSelectRow, empty
             <TableHead className="h-8">{t("inflightColModel")}</TableHead>
             <TableHead className="h-8">{t("inflightColChannel")}</TableHead>
             <TableHead className="h-8">{t("inflightColStage")}</TableHead>
+            <TableHead className="h-8">{t("inflightColRetry")}</TableHead>
             <TableHead className="h-8">{t("inflightColQueue")}</TableHead>
             <TableHead className="h-8">{t("inflightColElapsed")}</TableHead>
             <TableHead className="h-8">{t("inflightColStream")}</TableHead>
@@ -68,9 +80,13 @@ export function InflightTable({ rows, showAgent, onInterrupt, onSelectRow, empty
           {rows.map((row) => {
             const elapsedSec = (row.elapsed_ms / 1000).toFixed(1);
             const isSlow = row.elapsed_ms > 60000;
+            const rowKey = `${row.agent_id ?? 0}-${row.id}`;
+            const isExpanded = expanded.has(rowKey);
+            const hasChain =
+              (row.view.fallback_chain?.length ?? 0) > 0 || !!row.current_attempt;
             return (
+              <Fragment key={rowKey}>
               <TableRow
-                key={`${row.agent_id ?? 0}-${row.id}`}
                 className={onSelectRow ? "cursor-pointer hover:bg-muted/30" : undefined}
                 onClick={onSelectRow ? () => onSelectRow(row) : undefined}
               >
@@ -80,6 +96,17 @@ export function InflightTable({ rows, showAgent, onInterrupt, onSelectRow, empty
                   <EntityLabel entity="channel" id={row.view.channel_id} />
                 </TableCell>
                 <TableCell className="py-1.5">{row.stage}</TableCell>
+                <TableCell className="py-1.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 cursor-pointer disabled:cursor-default"
+                    disabled={!hasChain}
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleExpand(rowKey)}
+                  >
+                    <AttemptDots chain={row.view.fallback_chain} pending={row.current_attempt} />
+                  </button>
+                </TableCell>
                 <TableCell className="py-1.5">
                   {row.queued_ms > 0 ? (
                     <Badge variant="outline" className="text-xs px-1.5 py-0 border-amber-500/60 text-amber-600">
@@ -124,6 +151,17 @@ export function InflightTable({ rows, showAgent, onInterrupt, onSelectRow, empty
                   </TableCell>
                 )}
               </TableRow>
+              {isExpanded && hasChain && (
+                <TableRow className="bg-muted/20 hover:bg-muted/20">
+                  <TableCell colSpan={colCount} className="py-2 pl-10">
+                    <FallbackChainInline
+                      chain={row.view.fallback_chain}
+                      pending={row.current_attempt}
+                    />
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             );
           })}
         </TableBody>

@@ -19,6 +19,7 @@ import (
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/backend"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/inflight"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/limiter"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/resilience"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/upstream"
 	"github.com/VaalaCat/ai-gateway/internal/agent/reporter"
 	"github.com/VaalaCat/ai-gateway/internal/agent/rpc"
@@ -52,6 +53,7 @@ type Server struct {
 	httpSrv  *http.Server
 
 	Inflight     *inflight.Registry
+	Breakers     *resilience.Registry
 	LimiterStore *limiter.MemStore
 	stopWatchdog func()
 
@@ -435,6 +437,9 @@ func (s *Server) connectLoop(ctx context.Context) {
 		client.OnNotification(consts.RPCAgentInterrupt, func(ctx context.Context, params json.RawMessage) (any, error) {
 			return rpc.HandleInterrupt(s.Inflight, params)
 		})
+		client.OnNotification(consts.RPCAgentBreakers, func(ctx context.Context, params json.RawMessage) (any, error) {
+			return rpc.HandleBreakers(s.Breakers)
+		})
 		client.OnNotification(consts.RPCAgentLimiterUsage, func(ctx context.Context, params json.RawMessage) (any, error) {
 			var idx *cache.LimiterIndex
 			if s.Store != nil {
@@ -536,7 +541,8 @@ func (s *Server) buildRelayHandler(rf *agentproxy.RouteForwarder, relayTimeout t
 
 	dispatcher := backend.NewDispatcher(agentApp)
 	s.LimiterStore = limiter.NewMemStore()
-	return agentrelay.NewHandler(s.Bus, agentApp, dispatcher, s.Inflight, s.LimiterStore)
+	s.Breakers = resilience.NewRegistry()
+	return agentrelay.NewHandler(s.Bus, agentApp, dispatcher, s.Inflight, s.LimiterStore, s.Breakers)
 }
 
 // lazyWSClient 是 app.WSClient 的延迟代理。
@@ -607,18 +613,18 @@ func (s *Server) heartbeatLoop(ctx context.Context) {
 			}
 			addrJSON, _ := json.Marshal(s.Cfg.Agent.HTTPAddresses)
 			params := protocol.HeartbeatParams{
-				Uptime:         int64(time.Since(startTime).Seconds()),
-				CachedTokens:   s.Store.TokenCount(),
-				CachedChannels: s.Store.ChannelCount(),
-				CachedModels:   s.Store.ModelConfigCount(),
+				Uptime:               int64(time.Since(startTime).Seconds()),
+				CachedTokens:         s.Store.TokenCount(),
+				CachedChannels:       s.Store.ChannelCount(),
+				CachedModels:         s.Store.ModelConfigCount(),
 				CachedGlobalRoutings: s.Store.GlobalRoutingCount(),
 				CachedUserRoutings:   s.Store.UserRoutingsCount(),
-				Version:        s.Store.Version(),
-				HTTPAddresses:  addrJSON,
-				Tags:           s.Cfg.Agent.Tags,
-				ProxyURL:       s.Cfg.Agent.ProxyURL,
-				ListenPort:     extractPort(s.Cfg.Agent.Listen),
-				CacheStats:     s.Store.CacheSnapshot(),
+				Version:              s.Store.Version(),
+				HTTPAddresses:        addrJSON,
+				Tags:                 s.Cfg.Agent.Tags,
+				ProxyURL:             s.Cfg.Agent.ProxyURL,
+				ListenPort:           extractPort(s.Cfg.Agent.Listen),
+				CacheStats:           s.Store.CacheSnapshot(),
 			}
 			hbCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			_, err := client.Call(hbCtx, consts.RPCAgentHeartbeat, params)

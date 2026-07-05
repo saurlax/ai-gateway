@@ -66,7 +66,7 @@ type Handler struct {
 //
 // bus 入参收窄自 app.Application（17 方法）→ app.EventBus（1 方法），
 // 因为 NewHandler 只需要 EventBus 一项；让测试 stub 不必满足 Application 全集。
-func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher state.Dispatcher, registry *inflight.Registry, permit limiter.PermitStore) *Handler {
+func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher state.Dispatcher, registry *inflight.Registry, permit limiter.PermitStore, breakers *resilience.Registry) *Handler {
 	h := &Handler{
 		Agent:    agentApp,
 		registry: registry,
@@ -87,7 +87,10 @@ func NewHandler(bus app.EventBus, agentApp app.AgentApplication, dispatcher stat
 			aff = affinity.New(c) // app.AgentCache 满足 affinity.ConfigReader（含 Settings()）
 			// 韧性默认参数走管理后台 Settings(非 config.yaml);Runner 每请求实时读取,
 			// admin 改后经同步即时生效。Breakers 注册表每 handler 建一次、跨请求复用。
-			runner = &resilience.Runner{Settings: c, Breakers: resilience.NewRegistry()}
+			if breakers == nil {
+				breakers = resilience.NewRegistry()
+			}
+			runner = &resilience.Runner{Settings: c, Breakers: breakers}
 			// PermitStore 每 handler 建一次、跨请求复用（同 Breakers 注册表）。
 			// c 是 app.AgentCache，满足 limiter.Resolver（EffectiveRequest/AttemptLimiters）。
 			ps := permit

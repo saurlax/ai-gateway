@@ -4,32 +4,38 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { TraceDetail } from "@/components/business/trace-detail";
 import { formatDuration } from "@/lib/utils/format";
-import type { UsageLog } from "@/lib/types";
+import type { UsageLog, AttemptInProgress } from "@/lib/types";
+import { attemptDotClass } from "@/components/business/attempt-state";
 
 interface FallbackChainProps {
   chain: NonNullable<UsageLog["fallback_chain"]>;
   requestId: string;
+  pending?: AttemptInProgress | null;
 }
 
-export function FallbackChain({ chain, requestId }: FallbackChainProps) {
+export function FallbackChain({ chain, requestId, pending }: FallbackChainProps) {
   const t = useTranslations("logs");
+  const displayCount = chain.length + (pending ? 1 : 0);
 
   return (
     <div className="rounded-md border p-3 space-y-3">
       <div className="flex items-center gap-2 text-sm font-medium">
         <span>{t("chainTitle")}</span>
         <span className="text-muted-foreground font-normal">
-          {chain.length} {t("chainAttempts")}
+          {displayCount} {t("chainAttempts")}
         </span>
       </div>
 
       <div className="space-y-3">
         {chain.map((entry, idx) => {
-          const isLast = idx === chain.length - 1;
+          const isLast = idx === chain.length - 1 && !pending;
 
           return (
             <div key={entry.seq} className="space-y-1">
               <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span
+                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${attemptDotClass(entry)}`}
+                />
                 <span className="text-muted-foreground font-mono text-xs w-4">
                   {entry.seq}
                 </span>
@@ -82,6 +88,21 @@ export function FallbackChain({ chain, requestId }: FallbackChainProps) {
             </div>
           );
         })}
+        {pending && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-muted-foreground font-mono text-xs w-4">
+              {pending.seq}
+            </span>
+            <span className="font-medium">{pending.channel_name}</span>
+            <Badge variant="secondary" className="text-xs font-normal">
+              {pending.source}
+            </Badge>
+            <span className="text-blue-500 text-xs animate-pulse">
+              ⟳ {t("chainInProgress")}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,8 +9,19 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/VaalaCat/ai-gateway/internal/models"
 	"github.com/VaalaCat/ai-gateway/internal/pkg/protocol"
 )
+
+// AttemptInProgress 是"当前正在尝试的候选渠道"(尚无结果)。仅在途有意义,
+// 落库日志永远没有它,故不进共享的 protocol.UsageLogEntry。
+type AttemptInProgress struct {
+	Seq         int    `json:"seq"`
+	ChannelID   uint   `json:"channel_id"`
+	ChannelName string `json:"channel_name"`
+	Source      string `json:"source"`
+	RealModel   string `json:"real_model"`
+}
 
 // Meta 是 Track 时已知的初值。
 type Meta struct {
@@ -21,13 +32,14 @@ type Meta struct {
 
 // Snapshot 是某一时刻一条在途请求的只读视图。View 即"进行中的 usage_log"（与落库同构）。
 type Snapshot struct {
-	ID           int64                  `json:"id"`
-	ReqID        string                 `json:"req_id"`
-	View         protocol.UsageLogEntry `json:"view"`
-	Stage        string                 `json:"stage"`
-	ElapsedMs    int64                  `json:"elapsed_ms"`
-	QueuedMs     int64                  `json:"queued_ms"`
-	QueuedReason string                 `json:"queued_reason"`
+	ID             int64                  `json:"id"`
+	ReqID          string                 `json:"req_id"`
+	View           protocol.UsageLogEntry `json:"view"`
+	Stage          string                 `json:"stage"`
+	ElapsedMs      int64                  `json:"elapsed_ms"`
+	QueuedMs       int64                  `json:"queued_ms"`
+	QueuedReason   string                 `json:"queued_reason"`
+	CurrentAttempt *AttemptInProgress     `json:"current_attempt,omitempty"`
 }
 
 // Entry 是一条在途请求的可变句柄。可变字段统一用 mu 保护(snapshot 频率低,mutex 足够清晰)。
@@ -38,11 +50,12 @@ type Entry struct {
 	id        int64
 	cancel    context.CancelFunc
 
-	mu           sync.RWMutex
-	stage        string
-	view         protocol.UsageLogEntry
-	queuedAt     time.Time
-	queuedReason string
+	mu             sync.RWMutex
+	stage          string
+	view           protocol.UsageLogEntry
+	queuedAt       time.Time
+	queuedReason   string
+	currentAttempt *AttemptInProgress
 }
 
 // SetStage 更新当前阶段名(与 trace.Stage 字符串一致)。nil 接收者安全。
@@ -63,6 +76,21 @@ func (e *Entry) MarkQueued(reason string) {
 
 // Unqueue 退出排队（排到名额 / 被拒 / 断连）。
 func (e *Entry) Unqueue() { e.set(func() { e.queuedAt = time.Time{}; e.queuedReason = "" }) }
+
+// SetCurrentAttempt 标记"当前正在尝试的候选"(打之前调)。nil 接收者安全。
+func (e *Entry) SetCurrentAttempt(a *AttemptInProgress) { e.set(func() { e.currentAttempt = a }) }
+
+// UpdateFallbackChain 用已完成尝试链刷新 view.FallbackChain,并清"进行中"标记
+// (该候选刚 settle)。nil 接收者安全。
+func (e *Entry) UpdateFallbackChain(chain []models.AttemptRecord) {
+	e.set(func() {
+		e.view.FallbackChain = chain
+		e.currentAttempt = nil
+	})
+}
+
+// ClearCurrentAttempt 单独清"进行中"标记(executor 返回时兜底,防中止路径残留)。nil 接收者安全。
+func (e *Entry) ClearCurrentAttempt() { e.set(func() { e.currentAttempt = nil }) }
 
 func (e *Entry) set(fn func()) {
 	if e == nil {
@@ -89,13 +117,14 @@ func (e *Entry) snapshot(now time.Time) Snapshot {
 		queuedMs = now.Sub(e.queuedAt).Milliseconds()
 	}
 	return Snapshot{
-		ID:           e.id,
-		ReqID:        e.reqID,
-		View:         e.view,
-		Stage:        e.stage,
-		ElapsedMs:    now.Sub(e.startTime).Milliseconds(),
-		QueuedMs:     queuedMs,
-		QueuedReason: e.queuedReason,
+		ID:             e.id,
+		ReqID:          e.reqID,
+		View:           e.view,
+		Stage:          e.stage,
+		ElapsedMs:      now.Sub(e.startTime).Milliseconds(),
+		QueuedMs:       queuedMs,
+		QueuedReason:   e.queuedReason,
+		CurrentAttempt: e.currentAttempt,
 	}
 }
 

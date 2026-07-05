@@ -89,6 +89,17 @@ type oaiResponse struct {
 	ServiceTier string      `json:"service_tier,omitempty"`
 	Choices     []oaiChoice `json:"choices"`
 	Usage       *oaiUsage   `json:"usage,omitempty"`
+	// Timings 是 llama.cpp 系上游的非标准 token 计数(无 usage 时用)。
+	Timings *oaiTimings `json:"timings,omitempty"`
+}
+
+// oaiTimings 是 llama.cpp OpenAI 兼容上游放 token 数的非标准字段。
+// prompt_n=本轮实际评估的 prompt token(非缓存后缀),cache_n=命中 KV cache 复用的
+// token(缓存前缀,未重算),二者互斥;predicted_n=生成的 completion token。
+type oaiTimings struct {
+	PromptN    int `json:"prompt_n"`
+	PredictedN int `json:"predicted_n"`
+	CacheN     int `json:"cache_n,omitempty"`
 }
 
 type oaiChoice struct {

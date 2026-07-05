@@ -2,6 +2,7 @@ package observability
 
 import (
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/VaalaCat/ai-gateway/internal/consts"
@@ -81,7 +82,6 @@ func (h *Handler) GetLimiterUsage(c *app.Context, _ api.EmptyRequest) (LimiterUs
 		bucket string
 	}
 	agg := map[key]*LimiterBucketRow{}
-	order := []key{}
 	for _, r := range p.Wait() {
 		if r.failed != nil {
 			resp.FailedAgents = append(resp.FailedAgents, *r.failed)
@@ -96,7 +96,6 @@ func (h *Handler) GetLimiterUsage(c *app.Context, _ api.EmptyRequest) (LimiterUs
 					Metric: row.Metric, KeyBy: row.KeyBy, WindowEndMs: row.WindowEndMs,
 				}}
 				agg[k] = cur
-				order = append(order, k)
 			}
 			cur.Occupied += row.Occupied
 			cur.Waiters += row.Waiters
@@ -107,8 +106,29 @@ func (h *Handler) GetLimiterUsage(c *app.Context, _ api.EmptyRequest) (LimiterUs
 			})
 		}
 	}
-	for _, k := range order {
-		resp.Buckets = append(resp.Buckets, *agg[k])
+	for _, v := range agg {
+		resp.Buckets = append(resp.Buckets, *v)
 	}
+	sortLimiterResponse(&resp)
 	return resp, nil
+}
+
+// sortLimiterResponse 对聚合结果做确定性排序,避免 map 迭代 / agent 完成顺序不定
+// 导致限流 Tab 每次刷新行乱跳:Buckets 按 (LimiterID,Bucket),每行 PerAgent 按
+// AgentID,FailedAgents 按 AgentID。
+func sortLimiterResponse(resp *LimiterUsageResponse) {
+	sort.Slice(resp.Buckets, func(i, j int) bool {
+		a, b := resp.Buckets[i], resp.Buckets[j]
+		if a.LimiterID != b.LimiterID {
+			return a.LimiterID < b.LimiterID
+		}
+		return a.Bucket < b.Bucket
+	})
+	for i := range resp.Buckets {
+		pa := resp.Buckets[i].PerAgent
+		sort.Slice(pa, func(x, y int) bool { return pa[x].AgentID < pa[y].AgentID })
+	}
+	sort.Slice(resp.FailedAgents, func(i, j int) bool {
+		return resp.FailedAgents[i].AgentID < resp.FailedAgents[j].AgentID
+	})
 }

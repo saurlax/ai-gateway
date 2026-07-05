@@ -120,3 +120,43 @@ func TestLimiterUsage_IsolatesNodeFailure(t *testing.T) {
 type testErr string
 
 func (e testErr) Error() string { return string(e) }
+
+// TestSortLimiterResponse_Deterministic 验证聚合结果被确定性排序:
+// Buckets 按 (LimiterID,Bucket)、PerAgent 按 AgentID、FailedAgents 按 AgentID。
+// 修的是"限流 Tab 每次刷新行乱跳"(map/agent 完成顺序不定)。
+func TestSortLimiterResponse_Deterministic(t *testing.T) {
+	resp := &LimiterUsageResponse{
+		Buckets: []LimiterBucketRow{
+			{LimiterBucketStat: protocol.LimiterBucketStat{LimiterID: 2, Bucket: "b"},
+				PerAgent: []AgentBucket{{AgentID: 3}, {AgentID: 1}}},
+			{LimiterBucketStat: protocol.LimiterBucketStat{LimiterID: 1, Bucket: "z"}},
+			{LimiterBucketStat: protocol.LimiterBucketStat{LimiterID: 1, Bucket: "a"}},
+		},
+		FailedAgents: []FailedAgent{{AgentID: 9}, {AgentID: 4}},
+	}
+
+	sortLimiterResponse(resp)
+
+	type bk struct {
+		id uint
+		b  string
+	}
+	got := make([]bk, 0, len(resp.Buckets))
+	for _, b := range resp.Buckets {
+		got = append(got, bk{b.LimiterID, b.Bucket})
+	}
+	want := []bk{{1, "a"}, {1, "z"}, {2, "b"}}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Buckets[%d] = %v, want %v (full: %v)", i, got[i], want[i], got)
+		}
+	}
+
+	pa := resp.Buckets[2].PerAgent // (2,"b") 行
+	if len(pa) != 2 || pa[0].AgentID != 1 || pa[1].AgentID != 3 {
+		t.Fatalf("PerAgent not sorted by AgentID: %+v", pa)
+	}
+	if resp.FailedAgents[0].AgentID != 4 || resp.FailedAgents[1].AgentID != 9 {
+		t.Fatalf("FailedAgents not sorted by AgentID: %+v", resp.FailedAgents)
+	}
+}

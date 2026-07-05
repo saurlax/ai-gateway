@@ -293,27 +293,45 @@ func (c *ChatCodec) decodeNonStream(resp *http.Response, ch chan<- codec.Event) 
 		}
 	}
 
-	if oaiResp.Usage != nil {
-		u := &codec.Usage{
-			PromptTokens:     oaiResp.Usage.PromptTokens,
-			CompletionTokens: oaiResp.Usage.CompletionTokens,
-			TotalTokens:      oaiResp.Usage.TotalTokens,
-		}
-		if d := oaiResp.Usage.CompletionTokensDetails; d != nil {
-			u.ReasoningTokens = d.ReasoningTokens
-			u.AcceptedPredictionTokens = d.AcceptedPredictionTokens
-			u.RejectedPredictionTokens = d.RejectedPredictionTokens
-		}
-		if d := oaiResp.Usage.PromptTokensDetails; d != nil {
-			u.CachedTokens = d.CachedTokens
-		}
-		ch <- codec.Event{
-			Type:  codec.EventUsage,
-			Usage: u,
-		}
+	if u := usageFromWire(oaiResp.Usage, oaiResp.Timings); u != nil {
+		ch <- codec.Event{Type: codec.EventUsage, Usage: u}
 	}
 
 	ch <- codec.Event{Type: codec.EventDone}
+}
+
+// usageFromWire 从上游响应的 usage / timings 提取 IR 用量。
+// 标准 usage 优先;缺失时退回 llama.cpp 系的非标准 timings(gating: 只有
+// predicted_n>0 才采信,避免别的上游偶发 timings 字段乱入)。prompt_n/predicted_n/
+// cache_n 与网关的 Prompt/Completion/CacheRead 互斥口径 1:1 直映,不做 prompt_n+cache_n。
+func usageFromWire(u *oaiUsage, t *oaiTimings) *codec.Usage {
+	if u != nil {
+		out := &codec.Usage{
+			PromptTokens:     u.PromptTokens,
+			CompletionTokens: u.CompletionTokens,
+			TotalTokens:      u.TotalTokens,
+		}
+		if d := u.CompletionTokensDetails; d != nil {
+			out.ReasoningTokens = d.ReasoningTokens
+			out.AcceptedPredictionTokens = d.AcceptedPredictionTokens
+			out.RejectedPredictionTokens = d.RejectedPredictionTokens
+		}
+		if d := u.PromptTokensDetails; d != nil {
+			out.CachedTokens = d.CachedTokens
+		}
+		return out
+	}
+	// gating: 至少有一个正的 token 数才采信,挡掉别的上游偶发的空/无关 timings 字段。
+	// 用 PromptN||PredictedN(而非只看 PredictedN):空响应(0 completion)但有大 prompt
+	// 的真实 llama.cpp 请求也要计费,不能因 0 输出静默丢掉 prompt/cache。
+	if t != nil && (t.PromptN > 0 || t.PredictedN > 0) {
+		return &codec.Usage{
+			PromptTokens:     t.PromptN,
+			CompletionTokens: t.PredictedN,
+			CacheReadTokens:  t.CacheN,
+		}
+	}
+	return nil
 }
 
 func (c *ChatCodec) decodeStream(resp *http.Response, ch chan<- codec.Event) {
@@ -445,24 +463,8 @@ func (c *ChatCodec) decodeStream(resp *http.Response, ch chan<- codec.Event) {
 			}
 		}
 
-		if chunk.Usage != nil {
-			u := &codec.Usage{
-				PromptTokens:     chunk.Usage.PromptTokens,
-				CompletionTokens: chunk.Usage.CompletionTokens,
-				TotalTokens:      chunk.Usage.TotalTokens,
-			}
-			if d := chunk.Usage.CompletionTokensDetails; d != nil {
-				u.ReasoningTokens = d.ReasoningTokens
-				u.AcceptedPredictionTokens = d.AcceptedPredictionTokens
-				u.RejectedPredictionTokens = d.RejectedPredictionTokens
-			}
-			if d := chunk.Usage.PromptTokensDetails; d != nil {
-				u.CachedTokens = d.CachedTokens
-			}
-			ch <- codec.Event{
-				Type:  codec.EventUsage,
-				Usage: u,
-			}
+		if u := usageFromWire(chunk.Usage, chunk.Timings); u != nil {
+			ch <- codec.Event{Type: codec.EventUsage, Usage: u}
 		}
 	}
 

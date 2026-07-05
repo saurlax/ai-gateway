@@ -889,6 +889,7 @@
     "inflightEmpty": "无在途请求",
     "inflightColModel": "模型",
     "inflightColStage": "阶段",
+    "inflightColRetry": "重试/链路",
     "inflightColElapsed": "已耗时",
     "inflightColStream": "流式",
     "inflightColReqId": "请求 ID",
@@ -982,6 +983,7 @@
     "chainAttempts": "尝试记录",
     "chainAdopted": "已采用",
     "chainSkippedBreaker": "熔断跳过",
+    "chainInProgress": "正在尝试",
     "chainBreakerState": "熔断状态",
     "chainRetries": "重试次数",
     "rateLimit": {
@@ -1488,7 +1490,23 @@
     "tab": {
       "overview": "概览",
       "inflight": "在途",
-      "limiter": "限流"
+      "limiter": "限流",
+      "breaker": "熔断"
+    },
+    "breaker": {
+      "allHealthy": "全部渠道熔断器健康",
+      "onlyAbnormal": "只看异常",
+      "showAll": "看全部",
+      "agentsTripped": "{open}/{total} 节点异常",
+      "agentsHealthy": "{total} 节点正常",
+      "cooldownRemaining": "冷却剩余 {s}s",
+      "failures": "失败 {n}",
+      "failedAgents": "{n} 个节点查询失败",
+      "state": {
+        "open": "熔断",
+        "halfOpen": "半开",
+        "closed": "正常"
+      }
     },
     "liveIndicator": "实时 · 每 5s 自动刷新",
     "tableEntity": "实体",

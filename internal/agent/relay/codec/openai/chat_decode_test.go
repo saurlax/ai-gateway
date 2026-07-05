@@ -35,6 +35,90 @@ func collectStreamEvents(t *testing.T, sseData string) []codec.Event {
 }
 
 // ---------------------------------------------------------------------------
+// llama.cpp `timings` usage fallback (no standard `usage` object)
+// ---------------------------------------------------------------------------
+
+// streamUsage 返回流事件里最后一个 EventUsage 的 Usage（无则 nil）。
+func streamUsage(events []codec.Event) *codec.Usage {
+	var u *codec.Usage
+	for _, ev := range events {
+		if ev.Type == codec.EventUsage {
+			u = ev.Usage
+		}
+	}
+	return u
+}
+
+func TestChatDecodeStream_TimingsUsageFallback(t *testing.T) {
+	sse := "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"delta\":{}}]," +
+		"\"timings\":{\"cache_n\":11660,\"prompt_n\":1478,\"predicted_n\":32}}\n\n" +
+		"data: [DONE]\n\n"
+	u := streamUsage(collectStreamEvents(t, sse))
+	if u == nil {
+		t.Fatal("expected EventUsage derived from timings, got none")
+	}
+	// prompt_n/predicted_n/cache_n 直映（互斥相加，不做 prompt_n+cache_n）
+	if u.PromptTokens != 1478 || u.CompletionTokens != 32 || u.CacheReadTokens != 11660 {
+		t.Fatalf("timings mapping wrong: %+v", u)
+	}
+}
+
+func TestChatDecodeStream_UsagePreferredOverTimings(t *testing.T) {
+	sse := "data: {\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"delta\":{}}]," +
+		"\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":10}," +
+		"\"timings\":{\"prompt_n\":1478,\"predicted_n\":32,\"cache_n\":11660}}\n\n" +
+		"data: [DONE]\n\n"
+	u := streamUsage(collectStreamEvents(t, sse))
+	if u == nil || u.PromptTokens != 20 || u.CompletionTokens != 10 {
+		t.Fatalf("usage must win over timings, got %+v", u)
+	}
+	if u.CacheReadTokens != 0 {
+		t.Fatalf("timings cache_n must be ignored when usage present, got %+v", u)
+	}
+}
+
+func TestChatDecodeStream_TimingsGatedWhenEmpty(t *testing.T) {
+	// 全零 timings(别的上游偶发字段/无意义)→ 不产出 usage,落估算。
+	sse := "data: {\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"delta\":{}}]," +
+		"\"timings\":{\"prompt_n\":0,\"predicted_n\":0}}\n\n" +
+		"data: [DONE]\n\n"
+	if u := streamUsage(collectStreamEvents(t, sse)); u != nil {
+		t.Fatalf("all-zero timings must not produce usage, got %+v", u)
+	}
+}
+
+func TestChatDecodeStream_TimingsPromptOnlyTrusted(t *testing.T) {
+	// 空响应(0 completion)但有 prompt/cache → 仍计费,不能因 0 输出丢掉 prompt。
+	sse := "data: {\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"delta\":{}}]," +
+		"\"timings\":{\"prompt_n\":1478,\"predicted_n\":0,\"cache_n\":500}}\n\n" +
+		"data: [DONE]\n\n"
+	u := streamUsage(collectStreamEvents(t, sse))
+	if u == nil || u.PromptTokens != 1478 || u.CacheReadTokens != 500 || u.CompletionTokens != 0 {
+		t.Fatalf("prompt-only timings should still bill prompt/cache, got %+v", u)
+	}
+}
+
+func TestChatDecodeNonStream_TimingsUsageFallback(t *testing.T) {
+	body := `{"choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],` +
+		`"timings":{"prompt_n":1478,"predicted_n":32,"cache_n":11660}}`
+	resp := &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}
+	ch, err := (&ChatCodec{}).DecodeResponse(resp, false)
+	if err != nil {
+		t.Fatalf("DecodeResponse: %v", err)
+	}
+	var u *codec.Usage
+	for ev := range ch {
+		if ev.Type == codec.EventUsage {
+			u = ev.Usage
+		}
+	}
+	if u == nil || u.PromptTokens != 1478 || u.CompletionTokens != 32 || u.CacheReadTokens != 11660 {
+		t.Fatalf("non-stream timings mapping wrong: %+v", u)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DecodeRequest from fixture files
 // ---------------------------------------------------------------------------
 
