@@ -17,6 +17,7 @@ type Protocol string
 const (
 	ProtocolOpenAIChat      Protocol = "openai_chat"
 	ProtocolOpenAIResponses Protocol = "openai_responses"
+	ProtocolOpenAIImages    Protocol = "openai_images"
 	ProtocolClaude          Protocol = "claude"
 	ProtocolGemini          Protocol = "gemini"
 	ProtocolUnknown         Protocol = "unknown"

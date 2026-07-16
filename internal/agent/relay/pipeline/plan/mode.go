@@ -38,6 +38,9 @@ func shouldUseLegacy(ch *models.Channel, inboundProto codec.Protocol, modelName 
 	if ch == nil {
 		return false
 	}
+	if inboundProto == codec.ProtocolOpenAIImages {
+		return false
+	}
 	// 显式声明走 legacy
 	if ch.UseLegacyAdaptor {
 		return true
@@ -57,9 +60,16 @@ func shouldUseLegacy(ch *models.Channel, inboundProto codec.Protocol, modelName 
 }
 
 // shouldPassthrough 是 (*Handler).shouldPassthrough 的包级版——逻辑 1:1。
-// passthrough 必须 channel 显式 PassthroughEnabled，且 inbound == outbound 协议。
+// 常规协议必须 channel 显式 PassthroughEnabled，且 inbound == outbound 协议；
+// OpenAI Images 端点无 native codec，直接用 passthrough 保留文件表单。
 func shouldPassthrough(ch *models.Channel, inboundProto codec.Protocol, modelName string) bool {
-	if ch == nil || !ch.PassthroughEnabled {
+	if ch == nil {
+		return false
+	}
+	if inboundProto == codec.ProtocolOpenAIImages {
+		return true
+	}
+	if !ch.PassthroughEnabled {
 		return false
 	}
 	rules := upstream.ChannelOverrideRulesFor(ch)

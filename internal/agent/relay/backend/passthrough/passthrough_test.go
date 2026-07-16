@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -44,7 +45,7 @@ func TestApplyPassthroughOverrides_UnmarshalError_NoWarnLog(t *testing.T) {
 		t.Fatalf("build req: %v", err)
 	}
 
-	got := applyPassthroughOverrides(req, []byte(`{"model":"x"}`), ch, logger)
+	got := applyPassthroughOverrides(req, []byte(`{"model":"x"}`), ch, logger, true)
 
 	// 两段 override 都解析失败 + ApplyOverrides 对 nil/nil 是 no-op，因此 body 应原样返回。
 	if string(got) != `{"model":"x"}` {
@@ -621,7 +622,7 @@ func TestBuildPassthroughRequest_RejectsHostRewrite(t *testing.T) {
 	ch.BaseURL = "https://api.openai.com"
 	ch.ChannelCore.Endpoints = `{"chat_completions":"@evil.example/v1/chat/completions"}`
 	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-	_, err := buildPassthroughRequest(req, ch, codec.ProtocolOpenAIChat, []byte(`{}`))
+	_, err := buildPassthroughRequest(req, ch, codec.ProtocolOpenAIChat, []byte(`{}`), "application/json")
 	if err == nil {
 		t.Fatal("want host-mismatch error, got nil")
 	}
@@ -660,6 +661,87 @@ func TestBackend_ForwardsUAAndStripsClientCredentials(t *testing.T) {
 	}
 	if gotAuth != "Bearer k" {
 		t.Errorf("upstream Authorization = %q, want channel key", gotAuth)
+	}
+}
+
+func TestBackend_MultipartImageEditPassthrough(t *testing.T) {
+	var gotPath, gotContentType, gotAuth, gotModel, gotPrompt, gotFile string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotContentType = r.Header.Get("Content-Type")
+		gotAuth = r.Header.Get("Authorization")
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			t.Errorf("ParseMultipartForm: %v", err)
+		} else {
+			gotModel = r.FormValue("model")
+			gotPrompt = r.FormValue("prompt")
+			if files := r.MultipartForm.File["image"]; len(files) == 1 {
+				f, err := files[0].Open()
+				if err != nil {
+					t.Errorf("open file: %v", err)
+				} else {
+					b, _ := io.ReadAll(f)
+					gotFile = string(b)
+					f.Close()
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer upstream.Close()
+
+	var body strings.Builder
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("model", "gpt-image-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("prompt", "make it brighter"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("image", "image.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("png-bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ch := makeChannel(upstream.URL)
+	ch.ModelMapping = `{"gpt-image-1":"upstream-image"}`
+	rctx, _ := newPassthroughTestCtx(t, []byte(body.String()), false)
+	rctx.Context.Request = httptest.NewRequest(http.MethodPost, "http://gateway/v1/images/edits", strings.NewReader(body.String()))
+	rctx.Context.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	rctx.Input.Body = []byte(body.String())
+	rctx.Input.Model = "gpt-image-1"
+	rctx.Input.InboundProto = codec.ProtocolOpenAIImages
+	backend := &Backend{Agent: nil}
+
+	got := backend.Relay(rctx, state.Attempt{Channel: ch, RealModel: "gpt-image-1"})
+	if got.Err != nil {
+		t.Fatalf("unexpected Err: %v", got.Err)
+	}
+	if gotPath != "/v1/images/edits" {
+		t.Errorf("path = %q, want /v1/images/edits", gotPath)
+	}
+	if !strings.HasPrefix(gotContentType, "multipart/form-data; boundary=") {
+		t.Errorf("Content-Type = %q, want multipart/form-data", gotContentType)
+	}
+	if gotAuth != "Bearer k" {
+		t.Errorf("Authorization = %q, want Bearer k", gotAuth)
+	}
+	if gotModel != "upstream-image" {
+		t.Errorf("model = %q, want upstream-image", gotModel)
+	}
+	if gotPrompt != "make it brighter" {
+		t.Errorf("prompt = %q", gotPrompt)
+	}
+	if gotFile != "png-bytes" {
+		t.Errorf("file = %q, want png-bytes", gotFile)
 	}
 }
 

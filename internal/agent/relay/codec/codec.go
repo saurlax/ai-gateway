@@ -100,6 +100,8 @@ func PathToProtocol(path string) Protocol {
 		return ProtocolOpenAIResponses
 	case consts.RouteMessages:
 		return ProtocolClaude
+	case consts.RouteImagesGenerations, consts.RouteImagesEdits:
+		return ProtocolOpenAIImages
 	default:
 		return ProtocolUnknown
 	}

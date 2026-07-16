@@ -80,15 +80,21 @@ func TestMountRoutes(t *testing.T) {
 		t.Fatal("no routes mounted")
 	}
 
-	found := false
+	foundChat := false
+	foundImageEdits := false
 	for _, r := range routes {
 		if r.Path == "/v1/chat/completions" && r.Method == "POST" {
-			found = true
-			break
+			foundChat = true
+		}
+		if r.Path == "/v1/images/edits" && r.Method == "POST" {
+			foundImageEdits = true
 		}
 	}
-	if !found {
+	if !foundChat {
 		t.Error("/v1/chat/completions route not found")
+	}
+	if !foundImageEdits {
+		t.Error("/v1/images/edits route not found")
 	}
 }
 

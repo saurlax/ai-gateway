@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/codec"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/trace"
 	"github.com/VaalaCat/ai-gateway/internal/consts"
@@ -143,6 +145,46 @@ func TestBuildSuccess(t *testing.T) {
 	}
 	if len(rctx.Input.Body) == 0 {
 		t.Error("Body empty")
+	}
+}
+
+func TestBuildMultipartImageEdit(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("model", "gpt-image-1"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("image", "image.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("png-bytes")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	c := newGinCtxForTest(func(c *gin.Context) {
+		c.Request = httptest.NewRequest("POST", "/v1/images/edits", bytes.NewReader(body.Bytes()))
+		c.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	})
+	rctx := newTestRelayCtx(c)
+	if err := Build(rctx); err != nil {
+		t.Fatal(err)
+	}
+	if rctx.Input.Model != "gpt-image-1" {
+		t.Errorf("Model = %q", rctx.Input.Model)
+	}
+	if rctx.Input.InboundProto != codec.ProtocolOpenAIImages {
+		t.Errorf("InboundProto = %q, want %q", rctx.Input.InboundProto, codec.ProtocolOpenAIImages)
+	}
+	got, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, body.Bytes()) {
+		t.Error("multipart body was not restored for downstream")
 	}
 }
 

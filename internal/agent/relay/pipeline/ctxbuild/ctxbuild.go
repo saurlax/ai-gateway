@@ -10,7 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -57,11 +62,8 @@ func Build(rctx *state.RelayContext) error {
 	rec.WithInbound(rctx.Context.Request, body)
 	rctx.Context.Request.Body = io.NopCloser(bytes.NewReader(body))
 
-	var req struct {
-		Model  string `json:"model"`
-		Stream *bool  `json:"stream,omitempty"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
+	req, err := parseRequestMeta(rctx.Context.Request, body)
+	if err != nil {
 		wrapped := fmt.Errorf("%w: %v", state.ErrInvalidBody, err)
 		rec.WithFail(trace.StageInboundDecode, wrapped)
 		return wrapped
@@ -71,7 +73,7 @@ func Build(rctx *state.RelayContext) error {
 		return state.ErrModelRequired
 	}
 	rctx.Input.Model = req.Model
-	rctx.Input.IsStream = req.Stream != nil && *req.Stream
+	rctx.Input.IsStream = req.Stream
 
 	if s := rctx.Context.GetHeader(consts.HeaderXChannelID); s != "" {
 		id, perr := strconv.ParseUint(s, 10, 64)
@@ -82,4 +84,76 @@ func Build(rctx *state.RelayContext) error {
 		rctx.Input.ForcedChannelID = uint(id)
 	}
 	return nil
+}
+
+type requestMeta struct {
+	Model  string
+	Stream bool
+}
+
+func parseRequestMeta(req *http.Request, body []byte) (requestMeta, error) {
+	contentType := req.Header.Get(consts.HeaderContentType)
+	mediaType, params, _ := mime.ParseMediaType(contentType)
+	switch mediaType {
+	case "multipart/form-data":
+		return parseMultipartRequestMeta(body, params["boundary"])
+	case "application/x-www-form-urlencoded":
+		return parseURLEncodedRequestMeta(body)
+	default:
+		return parseJSONRequestMeta(body)
+	}
+}
+
+func parseJSONRequestMeta(body []byte) (requestMeta, error) {
+	var req struct {
+		Model  string `json:"model"`
+		Stream *bool  `json:"stream,omitempty"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return requestMeta{}, err
+	}
+	return requestMeta{Model: req.Model, Stream: req.Stream != nil && *req.Stream}, nil
+}
+
+func parseURLEncodedRequestMeta(body []byte) (requestMeta, error) {
+	values, err := url.ParseQuery(string(body))
+	if err != nil {
+		return requestMeta{}, err
+	}
+	return requestMeta{Model: values.Get("model"), Stream: values.Get("stream") == "true"}, nil
+}
+
+func parseMultipartRequestMeta(body []byte, boundary string) (requestMeta, error) {
+	if boundary == "" {
+		return requestMeta{}, fmt.Errorf("missing multipart boundary")
+	}
+	reader := multipart.NewReader(bytes.NewReader(body), boundary)
+	var meta requestMeta
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return requestMeta{}, err
+		}
+		name := part.FormName()
+		if name != "model" && name != "stream" {
+			part.Close()
+			continue
+		}
+		valueBytes, err := io.ReadAll(part)
+		part.Close()
+		if err != nil {
+			return requestMeta{}, err
+		}
+		value := strings.TrimSpace(string(valueBytes))
+		switch name {
+		case "model":
+			meta.Model = value
+		case "stream":
+			meta.Stream = value == "true"
+		}
+	}
+	return meta, nil
 }

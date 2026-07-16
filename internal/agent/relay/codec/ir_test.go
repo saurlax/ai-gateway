@@ -95,6 +95,8 @@ func TestPathToProtocol(t *testing.T) {
 		{"/v1/chat/completions", ProtocolOpenAIChat},
 		{"/v1/responses", ProtocolOpenAIResponses},
 		{"/v1/messages", ProtocolClaude},
+		{"/v1/images/generations", ProtocolOpenAIImages},
+		{"/v1/images/edits", ProtocolOpenAIImages},
 		{"/v1/embeddings", ProtocolUnknown},
 		{"/health", ProtocolUnknown},
 		{"", ProtocolUnknown},
@@ -181,6 +183,7 @@ func TestDefaultEndpointPaths(t *testing.T) {
 		{ProtocolOpenAIChat, "/v1/chat/completions"},
 		{ProtocolOpenAIResponses, "/v1/responses"},
 		{ProtocolClaude, "/v1/messages"},
+		{ProtocolOpenAIImages, ""},
 		{ProtocolUnknown, ""},
 	}
 	for _, tc := range tests {
@@ -234,6 +237,7 @@ func TestResolveEndpointPath(t *testing.T) {
 		{"fallback default chat", "", ProtocolOpenAIChat, "/v1/chat/completions"},
 		{"fallback default responses", "", ProtocolOpenAIResponses, "/v1/responses"},
 		{"fallback default claude", "", ProtocolClaude, "/v1/messages"},
+		{"images use original request path", "", ProtocolOpenAIImages, ""},
 		{"proto not in endpoints uses default", `{"chat_completions":"/cc"}`, ProtocolClaude, "/v1/messages"},
 	}
 	for _, tc := range tests {

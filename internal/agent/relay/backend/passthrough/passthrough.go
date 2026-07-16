@@ -6,7 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/backend/common"
@@ -70,17 +75,17 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 
 	upstreamModel := state.ApplyModelMapping(ch, modelName)
 
-	newBody, err := buildPassthroughBody(bodyBytes, ch, modelName, upstreamModel)
+	newBody, contentType, err := buildPassthroughBody(c.Request, bodyBytes, ch, modelName, upstreamModel)
 	if err != nil {
 		return state.AttemptResult{Err: err}
 	}
 
-	upstreamReq, err := buildPassthroughRequest(c.Request, ch, inboundProto, newBody)
+	upstreamReq, err := buildPassthroughRequest(c.Request, ch, inboundProto, newBody, contentType)
 	if err != nil {
 		return state.AttemptResult{Err: err}
 	}
 
-	newBody = applyPassthroughOverrides(upstreamReq, newBody, ch, logger)
+	newBody = applyPassthroughOverrides(upstreamReq, newBody, ch, logger, isJSONContentType(contentType))
 
 	newBody, rejected, rejRes := scripthook.RunUpstreamScripts(b.Agent, c, rctx, ch, inboundProto, modelName, upstreamReq, newBody)
 	if rejected {
@@ -229,9 +234,9 @@ func handlePassthroughErrorStatus(rec *trace.Recorder, resp *http.Response, _w g
 // 吞错行为对齐，避免坏配置导致生产 Warn 噪音）；ApplyOverrides 本身返回 err 仍是 Warn 级，
 // 因为它代表运行时合并失败而非配置层面的坏数据。
 // 返回最终的 body（成功合并 / 解析失败回落到原 body 都可能）。
-func applyPassthroughOverrides(upstreamReq *http.Request, newBody []byte, ch *models.Channel, logger *zap.Logger) []byte {
+func applyPassthroughOverrides(upstreamReq *http.Request, newBody []byte, ch *models.Channel, logger *zap.Logger, allowParamOverride bool) []byte {
 	var paramOverride, headerOverride map[string]any
-	if ch.ParamOverride != "" {
+	if allowParamOverride && ch.ParamOverride != "" {
 		if err := json.Unmarshal([]byte(ch.ParamOverride), &paramOverride); err != nil {
 			if logger != nil {
 				logger.Debug("passthrough: unmarshal param override failed, skipping",
@@ -264,7 +269,7 @@ func applyPassthroughOverrides(upstreamReq *http.Request, newBody []byte, ch *mo
 // buildPassthroughRequest 根据原始 *http.Request + channel 配置 + 新 body 构造上行 HTTP 请求。
 // 处理：endpoint 解析 / URL 拼接 / 经 upstream.ForwardClientHeaders 诚实透传客户端 header
 // (剥离受管头) / Authorization 覆盖 / Organization。
-func buildPassthroughRequest(origReq *http.Request, ch *models.Channel, inboundProto codec.Protocol, newBody []byte) (*http.Request, error) {
+func buildPassthroughRequest(origReq *http.Request, ch *models.Channel, inboundProto codec.Protocol, newBody []byte, contentType string) (*http.Request, error) {
 	// Build upstream URL: prefer Endpoints config path, fallback to original request path
 	endpointPath := codec.ResolveEndpointPath(ch.Endpoints, inboundProto)
 	if endpointPath == "" {
@@ -286,7 +291,11 @@ func buildPassthroughRequest(origReq *http.Request, ch *models.Channel, inboundP
 	// passthrough 恒同协议(pipeline/plan/mode.go 选取前提),故 crossProtocol=false。
 	upstream.ForwardClientHeaders(upstreamReq.Header, origReq.Header, false)
 	upstreamReq.Header.Set(consts.HeaderAuthorization, consts.BearerPrefix+ch.Key)
-	upstreamReq.Header.Set(consts.HeaderContentType, consts.ContentTypeJSON)
+	if contentType != "" {
+		upstreamReq.Header.Set(consts.HeaderContentType, contentType)
+	} else {
+		upstreamReq.Header.Set(consts.HeaderContentType, consts.ContentTypeJSON)
+	}
 	if ch.Organization != "" {
 		upstreamReq.Header.Set(consts.HeaderOpenAIOrg, ch.Organization)
 	}
@@ -296,7 +305,23 @@ func buildPassthroughRequest(origReq *http.Request, ch *models.Channel, inboundP
 
 // buildPassthroughBody 在原始 body 上替换 model + 应用 role mapping，
 // 返回重新 marshal 后的 body。失败返回 wrapped error，由调用方包成 state.AttemptResult。
-func buildPassthroughBody(bodyBytes []byte, ch *models.Channel, modelName, upstreamModel string) ([]byte, error) {
+func buildPassthroughBody(origReq *http.Request, bodyBytes []byte, ch *models.Channel, modelName, upstreamModel string) ([]byte, string, error) {
+	contentType := origReq.Header.Get(consts.HeaderContentType)
+	mediaType, params, _ := mime.ParseMediaType(contentType)
+	switch mediaType {
+	case "multipart/form-data":
+		body, ct, err := buildMultipartPassthroughBody(bodyBytes, params["boundary"], upstreamModel)
+		return body, ct, err
+	case "application/x-www-form-urlencoded":
+		body, err := buildURLEncodedPassthroughBody(bodyBytes, upstreamModel)
+		return body, contentType, err
+	default:
+		body, err := buildJSONPassthroughBody(bodyBytes, ch, modelName, upstreamModel)
+		return body, contentType, err
+	}
+}
+
+func buildJSONPassthroughBody(bodyBytes []byte, ch *models.Channel, modelName, upstreamModel string) ([]byte, error) {
 	var bodyMap map[string]any
 	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
 		return nil, fmt.Errorf("unmarshal request for passthrough: %w", err)
@@ -333,6 +358,71 @@ func buildPassthroughBody(bodyBytes []byte, ch *models.Channel, modelName, upstr
 		return nil, fmt.Errorf("marshal request for passthrough: %w", err)
 	}
 	return newBody, nil
+}
+
+func buildURLEncodedPassthroughBody(bodyBytes []byte, upstreamModel string) ([]byte, error) {
+	values, err := url.ParseQuery(string(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("parse form request for passthrough: %w", err)
+	}
+	values.Set("model", upstreamModel)
+	return []byte(values.Encode()), nil
+}
+
+func buildMultipartPassthroughBody(bodyBytes []byte, boundary, upstreamModel string) ([]byte, string, error) {
+	if boundary == "" {
+		return nil, "", fmt.Errorf("missing multipart boundary")
+	}
+	reader := multipart.NewReader(bytes.NewReader(bodyBytes), boundary)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			writer.Close()
+			return nil, "", fmt.Errorf("read multipart request for passthrough: %w", err)
+		}
+		header := cloneMIMEHeader(part.Header)
+		outPart, err := writer.CreatePart(header)
+		if err != nil {
+			part.Close()
+			writer.Close()
+			return nil, "", fmt.Errorf("write multipart request for passthrough: %w", err)
+		}
+		if part.FormName() == "model" {
+			_, err = io.Copy(outPart, strings.NewReader(upstreamModel))
+		} else {
+			_, err = io.Copy(outPart, part)
+		}
+		part.Close()
+		if err != nil {
+			writer.Close()
+			return nil, "", fmt.Errorf("copy multipart request for passthrough: %w", err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", fmt.Errorf("close multipart request for passthrough: %w", err)
+	}
+	return buf.Bytes(), writer.FormDataContentType(), nil
+}
+
+func cloneMIMEHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
+	dst := make(textproto.MIMEHeader, len(src))
+	for k, vals := range src {
+		dst[k] = append([]string(nil), vals...)
+	}
+	return dst
+}
+
+func isJSONContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = contentType
+	}
+	return mediaType == "" || mediaType == consts.ContentTypeJSON || strings.HasSuffix(mediaType, "+json")
 }
 
 // copyRespHeaders 把 src 里除 Content-Encoding / Content-Length 之外的 header 全部 Add 到 dst。

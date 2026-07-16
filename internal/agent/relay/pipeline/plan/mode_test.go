@@ -3,8 +3,8 @@ package plan
 import (
 	"testing"
 
-	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/codec"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/consts"
 	"github.com/VaalaCat/ai-gateway/internal/models"
 
@@ -28,6 +28,14 @@ func TestModePicker_LegacyUnknownProtocol(t *testing.T) {
 	got := defaultModePicker{}.Pick(ch, "gpt-4", codec.ProtocolUnknown)
 	if got != state.ModeLegacy {
 		t.Errorf("ProtocolUnknown → legacy, got %q", got)
+	}
+}
+
+func TestModePicker_ImagesPassthrough(t *testing.T) {
+	ch := &models.Channel{ChannelCore: models.ChannelCore{Type: consts.ChannelTypeOpenAI}}
+	got := defaultModePicker{}.Pick(ch, "gpt-image-1", codec.ProtocolOpenAIImages)
+	if got != state.ModePassthrough {
+		t.Errorf("OpenAI images protocol should use passthrough, got %q", got)
 	}
 }
 
