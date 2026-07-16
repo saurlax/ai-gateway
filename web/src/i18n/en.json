@@ -63,6 +63,7 @@
     "rateLimiters": "Rate Limiters",
     "byok": "BYOK",
     "byokAdmin": "BYOK",
+    "modelMarket": "Model Catalog",
     "monitoring": "Monitoring",
     "logs": "Logs",
     "maintenance": "Maintenance",
@@ -802,6 +803,10 @@
     "upToDate": "Already up to date",
     "noChangeGroup": "No change",
     "changedCount": "{count} changed"
+  },
+  "modelMarket": {
+    "title": "Model Catalog",
+    "description": "View available models and their prices in USD per million tokens."
   },
   "agents": {
     "title": "Agent Management",

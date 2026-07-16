@@ -355,6 +355,7 @@ func (s *Server) setupRoutes() {
 	userAuth.GET("/invite-codes", api.Adapt(adapter, api.BindQuery, inviteH.ListMine))
 	userAuth.POST("/invite-codes", api.Adapt(adapter, api.BindJSON, inviteH.Create))
 	userAuth.DELETE("/invite-codes/:id", api.Adapt(adapter, api.BindURI, inviteH.DeleteMine))
+	userAuth.GET("/models", api.Adapt(adapter, api.BindQuery, modelH.List))
 
 	// Portal model-routings (user-owned, scope forced to user)
 	userAuth.GET("/model-routings", api.Adapt(adapter, api.BindQuery, mrH.PortalList))

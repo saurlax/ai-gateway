@@ -45,6 +45,7 @@ import { PAGE_SIZES } from "@/lib/constants";
 import { formatPrice } from "@/lib/utils/format";
 import { copyTextWithFeedback } from "@/lib/utils/clipboard";
 import { formatErrorToast } from "@/lib/api/error-toast";
+import { useAuth } from "@/lib/auth";
 import type { ModelConfig } from "@/lib/types";
 
 // --- Helpers ---
@@ -76,7 +77,9 @@ function ModelNameCell({ name }: { name: string }) {
 
 export default function ModelsPage() {
   const t = useTranslations("models");
+  const tm = useTranslations("modelMarket");
   const tc = useTranslations("common");
+  const { isAdmin } = useAuth();
   const isMobile = useIsMobile();
   const router = useRouter();
 
@@ -106,7 +109,7 @@ export default function ModelsPage() {
     ...(filterValues.price_filter && filterValues.price_filter !== "all"
       ? { price_filter: String(filterValues.price_filter) }
       : {}),
-  });
+  }, isAdmin);
   const models = data?.data ?? [];
   const total = data?.total ?? 0;
   const pageCount = Math.ceil(total / pageSize) || 1;
@@ -203,10 +206,10 @@ export default function ModelsPage() {
       header: ({ column }) => <DataTableColumnHeader column={column} title={tc("updatedAt")} />,
       cell: ({ row }) => <DateCell timestamp={row.original.updated_at} />,
     },
-    {
+    ...(isAdmin ? [{
       id: "actions",
       header: tc("actions"),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: { original: ModelConfig } }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-8">
@@ -219,7 +222,7 @@ export default function ModelsPage() {
           </DropdownMenuContent>
         </DropdownMenu>
       ),
-    },
+    }] : []),
   ];
 
   // Mobile: hide less important columns by default
@@ -281,8 +284,10 @@ export default function ModelsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">{t("title")}</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">{t("description")}</p>
+        <h1 className="text-2xl font-bold">{isAdmin ? t("title") : tm("title")}</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          {isAdmin ? t("description") : tm("description")}
+        </p>
       </div>
 
       <DataTable
@@ -296,11 +301,17 @@ export default function ModelsPage() {
         onPaginationChange={handlePaginationChange}
         defaultColumnVisibility={defaultColumnVisibility}
         storageKey="models"
-        toolbar={toolbar}
+        toolbar={isAdmin ? toolbar : (
+          <FilterableToolbar
+            spec={filterSpec}
+            value={filterValues}
+            onChange={setFilterValues}
+          />
+        )}
       />
 
       {/* Edit Dialog */}
-      <Dialog open={!!editItem} onOpenChange={(open) => { if (!open) setEditItem(null); }}>
+      <Dialog open={isAdmin && !!editItem} onOpenChange={(open) => { if (!open) setEditItem(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{tc("edit")}: {editForm.model_name}</DialogTitle>
@@ -334,7 +345,7 @@ export default function ModelsPage() {
       </Dialog>
 
       <DeleteConfirm
-        open={!!deleteItem}
+        open={isAdmin && !!deleteItem}
         onOpenChange={(open) => { if (!open) setDeleteItem(null); }}
         onConfirm={handleDelete}
       />

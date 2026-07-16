@@ -63,6 +63,7 @@
     "rateLimiters": "限流器",
     "byok": "BYOK",
     "byokAdmin": "BYOK",
+    "modelMarket": "模型广场",
     "monitoring": "监控",
     "logs": "用量日志",
     "maintenance": "系统维护",
@@ -802,6 +803,10 @@
     "upToDate": "已是最新，无需同步",
     "noChangeGroup": "无变化",
     "changedCount": "{count} 项有变化"
+  },
+  "modelMarket": {
+    "title": "模型广场",
+    "description": "查看当前可用模型及计费单价（美元/百万 Token）。"
   },
   "agents": {
     "title": "节点管理",

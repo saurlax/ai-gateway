@@ -37,6 +37,51 @@ func setupTestMaster(t *testing.T) *master.Server {
 	return srv
 }
 
+func TestModelCatalogAccess(t *testing.T) {
+	srv := setupTestMaster(t)
+	srv.InitAdminUser("admin", "admin123")
+	adminToken := loginHelper(t, srv, "admin", "admin123")
+
+	w := reqHelper(srv, adminToken, "POST", "/api/admin/users", map[string]any{
+		"username": "catalog-user", "password": "pass1234", "role": 1,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create user: %d %s", w.Code, w.Body.String())
+	}
+	userToken := loginHelper(t, srv, "catalog-user", "pass1234")
+
+	w = reqHelper(srv, adminToken, "POST", "/api/admin/models", map[string]any{
+		"model_name": "catalog-model", "input_price": 1.25, "output_price": 5.5,
+	})
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create model: %d %s", w.Code, w.Body.String())
+	}
+
+	w = reqHelper(srv, userToken, "GET", "/api/models?search=catalog-model", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("normal user list models: %d %s", w.Code, w.Body.String())
+	}
+	var catalog struct {
+		Data []models.ModelConfig `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &catalog); err != nil {
+		t.Fatalf("decode model catalog: %v", err)
+	}
+	if len(catalog.Data) != 1 || catalog.Data[0].InputPrice != 1.25 || catalog.Data[0].OutputPrice != 5.5 {
+		t.Fatalf("unexpected model catalog response: %+v", catalog.Data)
+	}
+
+	w = reqHelper(srv, userToken, "PUT", "/api/admin/models/1", map[string]any{"input_price": 99})
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("normal user update model: expected 403, got %d %s", w.Code, w.Body.String())
+	}
+
+	w = reqHelper(srv, "", "GET", "/api/models", nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous model catalog: expected 401, got %d %s", w.Code, w.Body.String())
+	}
+}
+
 func loginAsAdmin(t *testing.T, srv *master.Server, user, pwd string) string {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"username": user, "password": pwd})

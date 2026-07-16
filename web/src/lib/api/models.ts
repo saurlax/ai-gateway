@@ -46,10 +46,13 @@ interface PricingUpdate {
 
 export function useModels(
   params: PaginatedParams & { search?: string; price_filter?: string } = {},
+  admin = true,
 ) {
   return useQuery({
-    queryKey: ["models", params],
-    queryFn: () => api.get<PaginatedResponse<ModelConfig>>(`/admin/models${buildQuery(params)}`),
+    queryKey: [admin ? "models" : "model-catalog", params],
+    queryFn: () => api.get<PaginatedResponse<ModelConfig>>(
+      `${admin ? "/admin/models" : "/models"}${buildQuery(params)}`,
+    ),
   });
 }
 

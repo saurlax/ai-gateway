@@ -19,6 +19,7 @@ import {
   Route,
   ScrollText,
   Server,
+  Store,
   Ticket,
   Wallet,
   UserCircle,
@@ -120,6 +121,9 @@ export function AppSidebar() {
     { label: t("billing"), icon: Wallet, href: "/billing" },
     { label: t("playground"), icon: MessageSquare, href: "/playground" },
     { label: t("byok"), icon: KeyRound, href: "/byok" },
+    ...(!isAdmin
+      ? [{ label: t("modelMarket"), icon: Store, href: "/models" }]
+      : []),
     { label: t("myModelRoutings"), icon: Network, href: "/profile/model-routings" },
     ...(publicConfig?.invite_enabled &&
     (isAdmin || (publicConfig?.invite_user_max_codes ?? 0) > 0)
