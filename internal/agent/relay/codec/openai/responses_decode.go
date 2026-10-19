@@ -394,7 +394,7 @@ func (c *ResponsesCodec) decodeNonStream(resp *http.Response, ch chan<- codec.Ev
 		}
 	}
 
-	doneEvent := codec.Event{Type: codec.EventDone, FinishReason: finishReason}
+	doneEvent := codec.Event{Type: codec.EventDone, FinishReason: finishReason, SourceProtocol: codec.ProtocolOpenAIResponses}
 	if len(fullMap) > 0 {
 		doneEvent.Extras = fullMap
 	}

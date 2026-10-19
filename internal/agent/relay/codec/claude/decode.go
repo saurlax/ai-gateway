@@ -40,6 +40,13 @@ func (c *ClaudeCodec) DecodeRequest(r *http.Request) (*codec.Request, error) {
 		InferenceGeo: raw.InferenceGeo,
 	}
 
+	// Preserve top-level request fields the IR does not model (safeguards,
+	// context_management, output_config, metadata, …) as raw JSON so a
+	// same-protocol encoder can forward them byte-for-byte. Claude Code pairs
+	// new body fields with an anthropic-beta header; dropping one half of the
+	// pair silently disables the feature (or 400s when only the field survives).
+	req.PassthroughFields = codec.CaptureUnknownFields(body, claudeRequestHandledFields)
+
 	// C2: tool_choice decode
 	if raw.ToolChoice != nil {
 		switch raw.ToolChoice.Type {
@@ -346,7 +353,22 @@ func (c *ClaudeCodec) decodeNonStream(resp *http.Response, ch chan<- codec.Event
 		}
 	}
 
-	ch <- codec.Event{Type: codec.EventDone}
+	// Collect response-level fields the IR does not model. A non-streaming
+	// auto-mode classifier reply carries `safeguard_results` (and a refusal
+	// carries `stop_details`) next to stop_reason; dropping them makes Claude
+	// Code treat the reply as having no verdict.
+	var respExtras map[string]any
+	var fullMap map[string]any
+	if err := json.Unmarshal(body, &fullMap); err == nil {
+		for _, k := range []string{"id", "type", "role", "content", "stop_reason", "stop_sequence", "usage"} {
+			delete(fullMap, k)
+		}
+		if len(fullMap) > 0 {
+			respExtras = fullMap
+		}
+	}
+
+	ch <- codec.Event{Type: codec.EventDone, Extras: respExtras, SourceProtocol: codec.ProtocolClaude}
 }
 
 // claudeToolUseAggState holds per-block aggregation state for streaming tool_use blocks.
@@ -364,6 +386,10 @@ func (c *ClaudeCodec) decodeStream(resp *http.Response, ch chan<- codec.Event) {
 	var cacheReadTokens, cacheWriteTokens int
 	var finishReason string
 	var stopSequence string
+	// messageDeltaRaw is the upstream `delta` object of the closing
+	// message_delta event, kept verbatim so unmodelled members
+	// (safeguard_results, stop_details, …) reach a same-protocol client.
+	var messageDeltaRaw json.RawMessage
 
 	// toolUseStates tracks in-flight tool_use content blocks by content_block index.
 	toolUseStates := map[int]*claudeToolUseAggState{}
@@ -509,6 +535,13 @@ func (c *ClaudeCodec) decodeStream(resp *http.Response, ch chan<- codec.Event) {
 						cacheWriteTokens = md.Usage.CacheCreationInputTokens
 					}
 				}
+				// Keep the whole closing message_delta data object. A real stream
+				// carries `safeguard_results` (auto-mode classifier verdicts) and
+				// `stop_details` inside `delta`, and `context_management` beside
+				// it; a streaming client reads them from this event and nowhere
+				// else. Preserved raw so a same-protocol encoder writes it back
+				// unchanged.
+				messageDeltaRaw = json.RawMessage(append([]byte(nil), data...))
 			}
 
 		case sseconsts.MessageStop:
@@ -523,7 +556,7 @@ func (c *ClaudeCodec) decodeStream(resp *http.Response, ch chan<- codec.Event) {
 					TotalTokens:      total,
 				},
 			}
-			ch <- codec.Event{Type: codec.EventDone, FinishReason: finishReason, StopSequence: stopSequence}
+			ch <- codec.Event{Type: codec.EventDone, FinishReason: finishReason, StopSequence: stopSequence, MessageDeltaRaw: messageDeltaRaw, SourceProtocol: codec.ProtocolClaude}
 
 		case "ping":
 			// Claude ping events are keepalives — ignore in IR

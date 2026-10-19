@@ -26,18 +26,22 @@ func FilterOptionalRequestFields(req *Request, permissions RequestFieldPermissio
 	if !permissions.AllowServiceTier {
 		req.ServiceTier = ""
 		delete(req.Extras, "service_tier")
+		delete(req.PassthroughFields, "service_tier")
 	}
 	if !permissions.AllowInferenceGeo {
 		req.InferenceGeo = ""
 		delete(req.Extras, "inference_geo")
+		delete(req.PassthroughFields, "inference_geo")
 	}
 	if !permissions.AllowStore {
 		req.Store = nil
 		delete(req.Extras, "store")
+		delete(req.PassthroughFields, "store")
 	}
 	if !permissions.AllowSafetyIdentifier {
 		req.SafetyIdentifier = ""
 		delete(req.Extras, "safety_identifier")
+		delete(req.PassthroughFields, "safety_identifier")
 	}
 	if !permissions.AllowIncludeObfuscation {
 		req.StreamOptions = filterIncludeObfuscation(req.StreamOptions)
@@ -52,6 +56,9 @@ func FilterOptionalRequestFields(req *Request, permissions RequestFieldPermissio
 	}
 	if len(req.Extras) == 0 {
 		req.Extras = nil
+	}
+	if len(req.PassthroughFields) == 0 {
+		req.PassthroughFields = nil
 	}
 }
 

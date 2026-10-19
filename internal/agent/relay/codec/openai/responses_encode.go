@@ -399,7 +399,10 @@ func (c *ResponsesCodec) encodeNonStream(events <-chan codec.Event, w http.Respo
 				}
 			}
 		case codec.EventDone:
-			if ev.Extras != nil {
+			// Only a Responses upstream's unmodelled fields may be re-emitted;
+			// Extras produced by another protocol (for example Claude's
+			// safeguard_results) would be meaningless on this wire format.
+			if ev.SourceProtocol == codec.ProtocolOpenAIResponses {
 				responseExtras = ev.Extras
 			}
 		}

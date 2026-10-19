@@ -14,6 +14,27 @@ func init() {
 	codec.RegisterOutbound(codec.ProtocolClaude, &ClaudeCodec{})
 }
 
+// claudeRequestHandledFields 是 DecodeRequest 已经建模（会由同一个 codec 的
+// EncodeRequest 从 IR 重新写出）或明确丢弃的顶层字段。其余顶层字段按原样
+// JSON 收进 Request.PassthroughFields，同协议编码时再原样合并回去——包括
+// Claude Code auto mode 的 `safeguards` 以及未来新增的任何字段。
+var claudeRequestHandledFields = map[string]bool{
+	"model":          true,
+	"max_tokens":     true,
+	"system":         true,
+	"messages":       true,
+	"stream":         true,
+	"tools":          true,
+	"tool_choice":    true,
+	"temperature":    true,
+	"top_p":          true,
+	"top_k":          true,
+	"stop_sequences": true,
+	"service_tier":   true,
+	"inference_geo":  true,
+	"thinking":       true,
+}
+
 // ClaudeCodec implements both codec.InboundCodec and codec.OutboundCodec for
 // the Anthropic Claude Messages API protocol.
 type ClaudeCodec struct{}

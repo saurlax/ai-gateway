@@ -129,6 +129,13 @@ type Request struct {
 	// Protocol-specific passthrough container
 	Extras map[string]any `json:"extras,omitempty"`
 
+	// PassthroughFields 保存入站协议发出、但 IR 未建模的顶层请求字段
+	// (例如 Claude Messages 的 safeguards / context_management / metadata)，
+	// 值为原始 JSON，原样保真。只有 InboundProtocol 与自身协议相同的编码器
+	// 才能把它们合并回出站请求；跨协议编码器必须忽略，否则会把源协议的
+	// 字段泄漏给不认识的出站上游(可能直接 400)。
+	PassthroughFields map[string]json.RawMessage `json:"passthrough_fields,omitempty"`
+
 	// InboundProtocol 由 InboundCodec.DecodeRequest 在成功解析后填写，标识
 	// 该请求的原始入站协议。编码器据此判断"源协议 == 目标协议"做 passthrough。
 	// 零值 "" 表示未知，ResolveTool 会退化到跨协议分支。
@@ -233,6 +240,15 @@ type Event struct {
 	Extras            map[string]any     `json:"extras,omitempty"` // non-streaming response unknown field passthrough
 	ContentBlockIndex *int               `json:"content_block_index,omitempty"`
 	StopSequence      string             `json:"stop_sequence,omitempty"`
+	// MessageDeltaRaw is the upstream message_delta event's data object exactly
+	// as sent. It carries the closing delta (stop_reason, stop_sequence) plus
+	// members the IR does not model — for Claude, `safeguard_results` and
+	// `stop_details` inside `delta`, and `context_management` at the top level.
+	// Only an encoder for the same SourceProtocol may write it back.
+	MessageDeltaRaw json.RawMessage `json:"message_delta_raw,omitempty"`
+	// SourceProtocol 标识产出该事件的解码器。Extras 里的未建模响应字段
+	// 只允许同协议入站编码器重新写出，避免跨协议把源协议字段塞给客户端。
+	SourceProtocol Protocol `json:"source_protocol,omitempty"`
 }
 
 // DeltaPayload carries incremental content for delta events.

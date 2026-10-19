@@ -219,6 +219,20 @@ func (c *ClaudeCodec) EncodeRequest(req *codec.Request, cfg *codec.ChannelConfig
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
+	// Same-protocol relay: merge back top-level fields the decoder preserved but
+	// the IR does not model (safeguards, context_management, output_config, …).
+	// Typed fields already in `raw` win, so this can never overwrite something
+	// the encoder intentionally set. On a cross-protocol relay the inbound
+	// protocol differs and these fields are dropped — another provider's
+	// upstream would reject or misinterpret them, and the beta header that
+	// pairs with them is stripped for the same reason.
+	if req.InboundProtocol == codec.ProtocolClaude {
+		body, err = codec.MergeRawFields(body, req.PassthroughFields)
+		if err != nil {
+			return nil, fmt.Errorf("merge passthrough request fields: %w", err)
+		}
+	}
+
 	endpointPath := cfg.EndpointPath
 	if endpointPath == "" {
 		endpointPath = "/v1/messages"
@@ -260,6 +274,7 @@ func (c *ClaudeCodec) encodeNonStream(events <-chan codec.Event, w http.Response
 	var contentBlocks []claudeRespContent
 	var usage *claudeUsage
 	stopReason := consts.ClaudeStopEndTurn
+	var responseExtras map[string]any
 
 	for ev := range events {
 		// Read finish reason at top of loop before switch
@@ -319,6 +334,10 @@ func (c *ClaudeCodec) encodeNonStream(events <-chan codec.Event, w http.Response
 					CacheCreationInputTokens: ev.Usage.CacheWriteTokens,
 				}
 			}
+		case codec.EventDone:
+			if ev.SourceProtocol == codec.ProtocolClaude {
+				responseExtras = ev.Extras
+			}
 		}
 	}
 
@@ -334,6 +353,16 @@ func (c *ClaudeCodec) encodeNonStream(events <-chan codec.Event, w http.Response
 	body, err := json.Marshal(resp)
 	if err != nil {
 		return fmt.Errorf("marshal response: %w", err)
+	}
+
+	// Same-protocol relay: write back response-level fields the IR does not
+	// model. Claude Code reads auto mode's `safeguard_results` from the reply,
+	// and a non-streaming classifier reply is exactly where it arrives.
+	if len(responseExtras) > 0 {
+		body, err = codec.MergeAnyFields(body, responseExtras)
+		if err != nil {
+			return fmt.Errorf("merge passthrough response fields: %w", err)
+		}
 	}
 
 	w.Header().Set(consts.HeaderContentType, consts.ContentTypeJSON)
@@ -626,11 +655,29 @@ func (c *ClaudeCodec) encodeStream(events <-chan codec.Event, w http.ResponseWri
 			}
 
 			// C10: message_delta with stop_reason and full usage
+			delta := map[string]any{
+				"stop_reason": stopReason,
+			}
 			md := map[string]any{
-				"type": sseconsts.MessageDelta,
-				"delta": map[string]any{
-					"stop_reason": stopReason,
-				},
+				"type":  sseconsts.MessageDelta,
+				"delta": delta,
+			}
+			// Same-protocol relay: restore the upstream event's unmodelled
+			// members. Auto mode's classifier verdict arrives only here, inside
+			// `delta` as `safeguard_results` (with `stop_details`), and a client
+			// reading the stream looks for them in this event and nowhere else.
+			// Typed keys already set above stay authoritative.
+			if ev.SourceProtocol == codec.ProtocolClaude {
+				for k, v := range codec.RawObjectMembers(ev.MessageDeltaRaw) {
+					switch k {
+					case "delta":
+						codec.MergeRawObjectAddMissing(delta, v)
+					case "usage", "type":
+						// typed / fixed above
+					default:
+						md[k] = v
+					}
+				}
 			}
 			if usage != nil {
 				usageMap := map[string]any{
