@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/protocolconfig"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/consts"
 	"github.com/VaalaCat/ai-gateway/internal/models"
@@ -106,6 +107,9 @@ func (e *remoteExecutor) Execute(
 	}
 	rctx.Inflight.MarkUpstreamUnreported()
 	meta := attemptwire.AttemptProxyMeta{Attempt: bound, RequestPath: request.URL.Path}
+	if request.Method != http.MethodPost {
+		meta.RequestMethod = request.Method
+	}
 	if _, _, ok := endpoint.ParseGeminiPath(request.URL.Path); ok {
 		// 1. 通过现有元数据携带生成参数，清除入站查询凭证。
 		providerURL := *request.URL
@@ -117,9 +121,11 @@ func (e *remoteExecutor) Execute(
 		}
 		providerURL.RawQuery = query.Encode()
 		meta.RequestPath = providerURL.RequestURI()
+	} else if protocolconfig.IsProviderAPI(rctx.Input.InboundProto) {
+		meta.RequestQuery = request.URL.RawQuery
 	}
 	if target.Kind != AttemptTargetRemote || target.AgentID == "" || meta.Validate() != nil ||
-		!attemptwire.ProviderPathAllowed(http.MethodPost, meta.RequestPath) {
+		!attemptwire.ProviderPathAllowed(meta.ProviderMethod(), meta.RequestPath) {
 		return remoteExecutionRejected(target.AgentID, errors.New("remote attempt input invalid"))
 	}
 	snapshot, ok := e.remoteTarget(target.AgentID)

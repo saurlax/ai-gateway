@@ -9,6 +9,7 @@ import (
 
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/pipeline/ctxbuild"
+	"github.com/VaalaCat/ai-gateway/internal/agent/relay/protocolconfig"
 	"github.com/VaalaCat/ai-gateway/internal/agent/relay/state"
 	"github.com/VaalaCat/ai-gateway/internal/pkg/app"
 	attemptwire "github.com/VaalaCat/ai-gateway/internal/pkg/attemptproxy"
@@ -38,7 +39,7 @@ func (b *contextBuilder) Build(c *gin.Context, meta attemptwire.AttemptProxyMeta
 	if err := meta.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("%w: invalid metadata", ErrContextBuildRejected)
 	}
-	if !attemptwire.ProviderPathAllowed(c.Request.Method, meta.RequestPath) {
+	if !attemptwire.ProviderPathAllowed(meta.ProviderMethod(), meta.RequestPath) {
 		return nil, nil, fmt.Errorf("%w: provider path not allowed", ErrContextBuildRejected)
 	}
 
@@ -46,10 +47,14 @@ func (b *contextBuilder) Build(c *gin.Context, meta attemptwire.AttemptProxyMeta
 	// all provider backends must observe the original provider path.
 	requestURL := c.Request.URL
 	endpointPath, endpointRawPath, endpointQuery := requestURL.Path, requestURL.RawPath, requestURL.RawQuery
-	endpointRequestURI := c.Request.RequestURI
+	endpointMethod, endpointRequestURI := c.Request.Method, c.Request.RequestURI
 	providerURL, err := url.ParseRequestURI(meta.RequestPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: invalid provider URL", ErrContextBuildRejected)
+	}
+	c.Request.Method = meta.ProviderMethod()
+	if protocolconfig.IsProviderAPI(protocolconfig.PathToProtocol(providerURL.Path)) {
+		providerURL.RawQuery = meta.RequestQuery
 	}
 	requestURL.Path = providerURL.Path
 	requestURL.RawPath = providerURL.Path
@@ -60,6 +65,7 @@ func (b *contextBuilder) Build(c *gin.Context, meta attemptwire.AttemptProxyMeta
 		relay.CloseContext(rctx)
 		requestURL.Path = endpointPath
 		requestURL.RawPath = endpointRawPath
+		c.Request.Method = endpointMethod
 		requestURL.RawQuery = endpointQuery
 		c.Request.RequestURI = endpointRequestURI
 	}

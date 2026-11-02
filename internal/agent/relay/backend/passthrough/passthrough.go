@@ -76,20 +76,27 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 
 	upstreamModel := state.ApplyModelMapping(ch, modelName)
 
-	newBody := bodyBytes
-	if inboundProto != llmkit.ProtocolGemini {
-		var err error
-		newBody, err = buildPassthroughBody(bodyBytes, ch, modelName, upstreamModel)
-		if err != nil {
-			return state.AttemptResult{Err: err}
+	var newBody []byte
+	var upstreamReq *http.Request
+	var err error
+	if protocolconfig.IsProviderAPI(inboundProto) {
+		upstreamReq, newBody, err = prepareProviderRequest(rctx, a)
+	} else {
+		newBody = bodyBytes
+		if inboundProto != llmkit.ProtocolGemini {
+			newBody, err = buildPassthroughBody(bodyBytes, ch, modelName, upstreamModel)
+			if err != nil {
+				return state.AttemptResult{Err: err}
+			}
 		}
+		upstreamReq, err = buildPassthroughRequest(c.Request, ch, inboundProto, newBody, upstreamModel)
 	}
-
-	upstreamReq, err := buildPassthroughRequest(c.Request, ch, inboundProto, newBody, upstreamModel)
 	if err != nil {
 		return state.AttemptResult{Err: err}
 	}
-
+	if upstreamReq.Body != nil {
+		defer upstreamReq.Body.Close()
+	}
 	if err := upstream.ApplyChannelAuth(upstreamReq, ch, inboundProto); err != nil {
 		rec.WithOutbound(upstreamReq, newBody, ch).WithFail(trace.StageUpstreamDispatch, err)
 		return state.AttemptResult{Err: err}
@@ -114,6 +121,9 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 		return result
 	}
 
+	if err := bindVideoResponse(rctx, a, resp); err != nil {
+		return state.AttemptResult{Err: err}
+	}
 	var observer *upstream.GeminiUsageObserver
 	var streamErr error
 	if inboundProto == llmkit.ProtocolGemini {
@@ -135,6 +145,10 @@ func (b *Backend) Relay(rctx *state.RelayContext, a state.Attempt) state.Attempt
 		cacheReadTokens, cacheWriteTokens = observer.Usage.CacheReadTokens, observer.Usage.CacheWriteTokens
 	} else {
 		promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens, responseText = extractPassthroughUsage(rec.UpstreamBodyBytes(), isStream)
+	}
+	// Polling/downloading/deleting a video must not settle its generation usage again.
+	if rctx.Input.VideoTask != nil && c.Request.Method != http.MethodPost {
+		promptTokens, completionTokens, cacheReadTokens, cacheWriteTokens = 0, 0, 0, 0
 	}
 
 	return state.AttemptResult{

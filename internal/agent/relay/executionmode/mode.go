@@ -11,7 +11,7 @@ import (
 
 // ForChannel returns the provider execution mode for one selected channel.
 func ForChannel(ch *models.Channel, realModel string, inbound llmkit.Protocol, toolCalls llmkit.ToolCallRequestInfo) attemptproxy.ExecutionMode {
-	if inbound == llmkit.ProtocolGemini {
+	if inbound == llmkit.ProtocolGemini || protocolconfig.IsProviderAPI(inbound) {
 		return attemptproxy.ModePassthrough
 	}
 	if shouldUseLegacy(ch, inbound, realModel) {
