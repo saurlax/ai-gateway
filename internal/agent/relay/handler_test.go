@@ -62,7 +62,13 @@ func TestRelayHandlerLiveTransferAndInterrupt(t *testing.T) {
 			var snapshot inflight.Snapshot
 			require.Eventually(t, func() bool {
 				rows := registry.Snapshot()
-				if len(rows) != 1 || rows[0].Progress.ClientBodyBytes == nil || *rows[0].Progress.ClientBodyBytes == 0 {
+				if len(rows) != 1 {
+					return false
+				}
+				progress := rows[0].Progress
+				// Native encoding can write the initial role frame before reading the provider body.
+				if progress.UpstreamBodyBytes == nil || *progress.UpstreamBodyBytes == 0 ||
+					progress.ClientBodyBytes == nil || *progress.ClientBodyBytes == 0 {
 					return false
 				}
 				snapshot = rows[0]
