@@ -1,0 +1,49 @@
+name: Publish GHCR image
+
+on:
+  push:
+    branches: ['codex/ghcr-release']
+
+jobs:
+  publish:
+    if: github.repository == 'saurlax/ai-gateway'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      KO_DOCKER_REPO: ghcr.io/saurlax/ai-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Build frontend
+        run: |
+          ./scripts/ci.sh frontend-install
+          ./scripts/ci.sh frontend-build
+          touch web/dist/.keep
+      - uses: ko-build/setup-ko@v0.7
+      - name: Sign in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | ko login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build and publish image
+        run: |
+          export COMMIT="$(git rev-parse --short=12 HEAD)"
+          export VERSION="v0.0.27-saurlax.${COMMIT}"
+          export BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          image="$(ko build ./cmd --bare --sbom=none --platform=linux/amd64,linux/arm64 \
+            --image-label="org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --image-label="org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "sha-$COMMIT")"
+          printf 'Published %s\n' "$image"
+          printf 'Image: `%s`\n' "$image" >> "$GITHUB_STEP_SUMMARY"
